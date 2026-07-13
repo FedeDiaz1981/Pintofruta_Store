@@ -1,0 +1,204 @@
+@import "tailwindcss";
+@plugin "daisyui";
+
+@theme inline {
+  --font-sans: var(--font-poppins);
+  --font-mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+}
+
+:root {
+  --pf-primary: #a86d45;
+  --pf-primary-dark: #8f5a35;
+  --pf-primary-darker: #6f4528;
+  --pf-primary-soft: #bc875c;
+  --pf-primary-faint: #dcb492;
+
+  --pf-secondary: #c8b089;
+  --pf-secondary-dark: #ae966d;
+  --pf-secondary-light: #d8c19f;
+  --pf-secondary-faint: #eadcc1;
+
+  --pf-wood: #a86d45;
+  --pf-wood-soft: #bc875c;
+  --pf-wood-muted: #8f5a35;
+
+  --pf-lino: #c8b089;
+  --pf-lino-soft: #d8c19f;
+  --pf-lino-muted: #ae966d;
+
+  --pf-sand: #e6dcc8;
+  --pf-sand-soft: #efe5d4;
+  --pf-sand-muted: #d6c4a5;
+
+  --pf-cream: #fcfaf6;
+  --pf-cream-soft: #f5efe5;
+  --pf-cream-muted: #ece3d3;
+  --pf-porcelain: #f9f6ef;
+
+  --pf-clay: #b87f54;
+  --pf-clay-soft: #c9956b;
+  --pf-clay-faint: #dcb492;
+
+  --pf-sage: #b89267;
+  --pf-sage-light: #dfcdb2;
+  --pf-olive: #8f7552;
+  --pf-moss: #6f563a;
+  --pf-moss-soft: #9f8360;
+
+  --pf-bg: #ece3d3;
+  --pf-surface: #fcfaf6;
+  --pf-surface-alt: #f4ebdd;
+  --pf-surface-warm: #f7f1e7;
+  --pf-surface-strong: #efe4d0;
+
+  --pf-border: rgba(168, 109, 69, 0.16);
+  --pf-border-strong: rgba(168, 109, 69, 0.3);
+  --pf-border-warm: rgba(168, 109, 69, 0.18);
+  --pf-border-soft: rgba(168, 109, 69, 0.1);
+
+  --pf-text: #2e3130;
+  --pf-text-soft: #49463f;
+  --pf-muted: #6f6c64;
+  --pf-muted-soft: #918a7f;
+
+  --pf-shadow: 0 18px 40px rgba(74, 57, 38, 0.14);
+  --pf-shadow-soft: 0 10px 24px rgba(74, 57, 38, 0.1);
+  --pf-shadow-warm: 0 18px 42px rgba(168, 109, 69, 0.12);
+  --pf-radius: 22px;
+}
+
+html[data-theme="caramellatte"] {
+  color-scheme: light;
+  --color-primary: var(--pf-primary);
+  --color-primary-content: #fff9f1;
+  --color-secondary: var(--pf-secondary);
+  --color-secondary-content: var(--pf-text);
+  --color-accent: var(--pf-sage);
+  --color-accent-content: #f8fbf5;
+  --color-neutral: var(--pf-text);
+  --color-neutral-content: var(--pf-cream);
+  --color-base-100: var(--pf-cream);
+  --color-base-200: var(--pf-sand);
+  --color-base-300: var(--pf-sand-light);
+  --color-base-content: var(--pf-text);
+  --color-info: var(--pf-lino-muted);
+  --color-info-content: #fffaf2;
+  --color-success: var(--pf-primary);
+  --color-success-content: #f4fbf7;
+  --color-warning: var(--pf-secondary-dark);
+  --color-warning-content: #fff8ec;
+  --color-error: var(--pf-wood-muted);
+  --color-error-content: #fff4ef;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  position: relative;
+  color: var(--pf-text);
+  background:
+    radial-gradient(circle at top left, rgba(168, 109, 69, 0.2), transparent 32%),
+    radial-gradient(circle at top center, rgba(200, 176, 137, 0.18), transparent 28%),
+    radial-gradient(circle at top right, rgba(232, 220, 200, 0.12), transparent 30%),
+    linear-gradient(180deg, var(--pf-cream) 0%, var(--pf-sand-soft) 26%, var(--pf-bg) 58%, var(--pf-cream-soft) 100%);
+  font-family: var(--font-poppins), "Segoe UI", sans-serif;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 36px 36px;
+  opacity: 0.14;
+  mix-blend-mode: soft-light;
+  z-index: 0;
+}
+
+body > * {
+  position: relative;
+}
+
+header {
+  position: relative;
+  z-index: 10010;
+  overflow: visible;
+}
+
+::selection {
+  background: var(--pf-primary);
+  color: #fff;
+}
+
+a {
+  color: var(--pf-primary-darker);
+}
+
+a:hover,
+a:focus {
+  color: var(--pf-primary);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--pf-text);
+}
+
+button,
+.btn {
+  text-transform: none;
+}
+
+.pf-shell {
+  width: min(1470px, calc(100% - 24px));
+  margin: 0 auto;
+}
+
+.pf-card {
+  background: rgba(248, 242, 232, 0.96);
+  border: 1px solid var(--pf-border);
+  border-radius: var(--pf-radius);
+  box-shadow: var(--pf-shadow);
+}
+
+.pf-muted {
+  color: var(--pf-muted);
+}
+
+.pf-btn-rounded {
+  border-radius: 999px;
+  border: 1px solid var(--pf-primary-dark);
+  background: linear-gradient(180deg, var(--pf-primary-darker), var(--pf-primary));
+  color: #fff;
+  box-shadow: 0 14px 26px rgba(74, 57, 38, 0.18);
+}
+
+.pf-btn-rounded:hover {
+  background: linear-gradient(180deg, var(--pf-primary), var(--pf-primary-dark));
+  border-color: var(--pf-primary);
+}
+
+.pf-section-title {
+  position: relative;
+  padding-bottom: 14px;
+}
+
+.pf-section-title::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 112px;
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--pf-primary-darker), var(--pf-secondary));
+  box-shadow: 0 6px 16px rgba(53, 72, 61, 0.12);
+}

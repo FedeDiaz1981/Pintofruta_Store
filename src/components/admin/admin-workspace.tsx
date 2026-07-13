@@ -1,0 +1,667 @@
+"use client";
+
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import { deleteAdminRecord, saveAdminRecord } from "@/app/admin/actions";
+import type {
+  AdminCrudViewModel,
+  AdminFieldDefinition,
+  AdminTableDefinition,
+  AdminTableKey,
+} from "@/application/admin-crud";
+import { formatCurrency } from "@/lib/catalog";
+
+type DraftRecord = Record<string, string | number | boolean | null>;
+
+type EditorState = {
+  tableKey: AdminTableKey;
+  rowId: string;
+  draft: DraftRecord;
+};
+
+const sidebarSections: { title: string; keys: AdminTableKey[] }[] = [
+  { title: "Listas", keys: ["products", "brands", "categories", "users"] },
+  { title: "Contenido", keys: ["hero_slides", "banners"] },
+  { title: "Registro", keys: ["site_content_meta"] },
+];
+
+function toDraftValue(field: AdminFieldDefinition, value: unknown): string | number | boolean | null {
+  if (field.kind === "boolean") {
+    return Boolean(value);
+  }
+
+  if (field.kind === "number") {
+    if (value === "" || value == null) {
+      return "";
+    }
+
+    return Number(value);
+  }
+
+  return value == null ? "" : String(value);
+}
+
+function emptyDraftFor(table: AdminTableDefinition): DraftRecord {
+  const draft: DraftRecord = {};
+
+  for (const field of table.fields) {
+    draft[field.key] = field.kind === "boolean" ? false : "";
+  }
+
+  return draft;
+}
+
+function draftFromRow(table: AdminTableDefinition, row: Record<string, unknown> | null | undefined): DraftRecord {
+  const draft = emptyDraftFor(table);
+
+  if (!row) {
+    return draft;
+  }
+
+  for (const field of table.fields) {
+    draft[field.key] = toDraftValue(field, row[field.key]);
+  }
+
+  return draft;
+}
+
+function stringifyDraft(draft: DraftRecord) {
+  return JSON.stringify(draft);
+}
+
+function formatCellValue(field: AdminFieldDefinition | undefined, value: unknown) {
+  if (field?.kind === "boolean") {
+    return value ? "Activo" : "Inactivo";
+  }
+
+  if (field?.key === "role" && typeof value === "string") {
+    const roles: Record<string, string> = {
+      admin: "Administrador",
+      customer: "Cliente",
+      client: "Cliente",
+    };
+
+    return roles[value.toLowerCase()] ?? value;
+  }
+
+  if (field?.key === "status" && typeof value === "string") {
+    const statuses: Record<string, string> = {
+      active: "Activo",
+      published: "Publicado",
+      visible: "Visible",
+      enabled: "Habilitado",
+      inactive: "Inactivo",
+    };
+
+    return statuses[value.toLowerCase()] ?? value;
+  }
+
+  if (field?.kind === "number") {
+    if (value == null || value === "") {
+      return "—";
+    }
+
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return String(value);
+    }
+
+    if (field.key.toLowerCase().includes("price")) {
+      return formatCurrency(numeric);
+    }
+
+    return new Intl.NumberFormat("es-AR").format(numeric);
+  }
+
+  if (value == null || value === "") {
+    return "—";
+  }
+
+  return String(value);
+}
+
+function getCreateLabel(table: AdminTableDefinition) {
+  switch (table.key) {
+    case "hero_slides":
+      return "Nuevo carrusel";
+    case "products":
+      return "Nuevo producto";
+    case "brands":
+      return "Nueva marca";
+    case "categories":
+      return "Nueva categoría";
+    case "users":
+      return "Nuevo usuario";
+    default:
+      return "Nuevo registro";
+  }
+}
+
+function getActiveCount(rows: Record<string, unknown>[]) {
+  return rows.filter((row) => {
+    if (typeof row.active === "boolean") {
+      return row.active;
+    }
+
+    if (typeof row.visible === "boolean") {
+      return row.visible;
+    }
+
+    if (typeof row.featured === "boolean") {
+      return row.featured;
+    }
+
+    if (typeof row.status === "string") {
+      return ["active", "published", "visible", "enabled"].includes(row.status.toLowerCase());
+    }
+
+    return false;
+  }).length;
+}
+
+function getMaxOrder(rows: Record<string, unknown>[]) {
+  const keys = ["order", "order_index", "sort_order", "position"];
+
+  let max = 0;
+
+  for (const row of rows) {
+    for (const key of keys) {
+      const value = row[key];
+      if (typeof value === "number" && Number.isFinite(value)) {
+        max = Math.max(max, value);
+      }
+    }
+  }
+
+  return max;
+}
+
+function getRowId(table: AdminTableDefinition, row: Record<string, unknown>) {
+  return String(row[table.idField] ?? "");
+}
+
+export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
+  const { overview, tables } = model;
+  const initialTableKey = (tables.find((table) => table.key === "hero_slides")?.key ?? tables[0]?.key ?? "") as AdminTableKey;
+
+  const [selectedTableKey, setSelectedTableKey] = useState<AdminTableKey>(initialTableKey);
+  const [query, setQuery] = useState("");
+  const [selectedRowId, setSelectedRowId] = useState("");
+  const [editor, setEditor] = useState<EditorState | null>(null);
+
+  const selectedTable = useMemo(
+    () => tables.find((table) => table.key === selectedTableKey) ?? tables[0],
+    [selectedTableKey, tables],
+  );
+
+  const selectedRows = useMemo(() => (selectedTable?.rows as Record<string, unknown>[]) ?? [], [selectedTable]);
+  const fieldMap = useMemo(() => new Map(selectedTable?.fields.map((field) => [field.key, field]) ?? []), [selectedTable]);
+
+  const visibleRows = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+
+    if (!normalized) {
+      return selectedRows;
+    }
+
+    return selectedRows.filter((row) =>
+      Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(normalized)),
+    );
+  }, [query, selectedRows]);
+
+  const activeCount = getActiveCount(selectedRows);
+  const maxOrder = getMaxOrder(selectedRows);
+  const totalCount = selectedRows.length;
+
+  async function handleSave(formData: FormData) {
+    await saveAdminRecord(formData);
+    setEditor(null);
+  }
+
+  function openNew(table: AdminTableDefinition) {
+    setSelectedTableKey(table.key);
+    setSelectedRowId("");
+    setQuery("");
+    setEditor({
+      tableKey: table.key,
+      rowId: "",
+      draft: emptyDraftFor(table),
+    });
+  }
+
+  function openEdit(table: AdminTableDefinition, row: Record<string, unknown>) {
+    const rowId = getRowId(table, row);
+
+    setSelectedTableKey(table.key);
+    setSelectedRowId(rowId);
+    setEditor({
+      tableKey: table.key,
+      rowId,
+      draft: draftFromRow(table, row),
+    });
+  }
+
+  function closeEditor() {
+    setEditor(null);
+  }
+
+  if (!selectedTable) {
+    return null;
+  }
+
+  return (
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.95),_rgba(243,236,220,0.96)_42%,_rgba(233,222,198,0.98))] text-slate-900">
+      <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col xl:flex-row">
+        <aside className="border-b border-white/20 bg-[linear-gradient(180deg,#0d1524_0%,#111c2f_52%,#0b1220_100%)] px-4 py-5 text-slate-100 shadow-[inset_-1px_0_0_rgba(255,255,255,0.04)] xl:w-[300px] xl:border-b-0 xl:border-r xl:px-5 xl:py-6">
+          <div className="rounded-[28px] border border-white/10 bg-white/5 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.18)]">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(180deg,var(--pf-secondary-dark)_0%,var(--pf-primary)_100%)] text-lg font-black tracking-tight text-white">
+                PF
+              </div>
+              <div>
+                <p className="text-lg font-semibold text-[var(--pf-secondary-light)]">Pintofruta</p>
+                <p className="text-sm text-slate-300">Panel de administracion</p>
+              </div>
+            </div>
+          </div>
+
+          <nav className="mt-6 space-y-5">
+            {sidebarSections.map((section) => {
+              const sectionTables = section.keys
+                .map((key) => tables.find((table) => table.key === key))
+                .filter((table): table is AdminTableDefinition => Boolean(table));
+
+              if (sectionTables.length === 0) {
+                return null;
+              }
+
+              return (
+                <div key={section.title}>
+                  <div className="mb-3 flex items-center justify-between text-[11px] font-black uppercase tracking-[0.34em] text-slate-400">
+                    <span>{section.title}</span>
+                    <span>▴</span>
+                  </div>
+                  <div className="space-y-2">
+                    {sectionTables.map((table) => {
+                      const active = table.key === selectedTable.key;
+
+                      return (
+                        <button
+                          key={table.key}
+                          type="button"
+                          onClick={() => {
+                            setSelectedTableKey(table.key);
+                            setSelectedRowId("");
+                            setQuery("");
+                            setEditor(null);
+                          }}
+                          className={`flex w-full items-center justify-between rounded-[18px] px-4 py-4 text-left transition ${
+                            active
+                              ? "bg-[linear-gradient(90deg,var(--pf-secondary-light)_0%,var(--pf-secondary)_100%)] text-slate-900 shadow-[0_14px_30px_rgba(168,109,69,0.24)]"
+                              : "bg-transparent text-slate-300 hover:bg-white/5"
+                          }`}
+                        >
+                          <span className="text-sm font-semibold">{table.label}</span>
+                          <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${active ? "bg-white/40" : "bg-white/10"}`}>
+                            {(table.rows as unknown[]).length}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </nav>
+
+        </aside>
+
+        <section className="flex-1 px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
+          <div className="rounded-[30px] border border-white/70 bg-[rgba(250,246,239,0.92)] p-5 shadow-[0_24px_60px_rgba(58,44,25,0.12)] backdrop-blur">
+            <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+              <div className="max-w-3xl">
+                <p className="text-[11px] font-black uppercase tracking-[0.36em] text-[var(--pf-secondary)]">Administracion</p>
+                <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-900 sm:text-5xl">
+                  {selectedTable.label}
+                </h1>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 xl:w-[620px] xl:grid-cols-5">
+                <div className="flex min-h-[94px] flex-col justify-between rounded-[22px] border border-[var(--pf-border-soft)] bg-white p-4 shadow-[0_10px_25px_rgba(58,44,25,0.06)]">
+                  <p className="text-[10px] font-black uppercase leading-none tracking-[0.26em] text-slate-400">Productos</p>
+                  <p className="text-2xl font-black leading-none text-slate-900">{overview.counts.products}</p>
+                </div>
+                <div className="flex min-h-[94px] flex-col justify-between rounded-[22px] border border-[var(--pf-border-soft)] bg-white p-4 shadow-[0_10px_25px_rgba(58,44,25,0.06)]">
+                  <p className="text-[10px] font-black uppercase leading-none tracking-[0.26em] text-slate-400">Categorías</p>
+                  <p className="text-2xl font-black leading-none text-slate-900">{overview.counts.categories}</p>
+                </div>
+                <div className="flex min-h-[94px] flex-col justify-between rounded-[22px] border border-[var(--pf-border-soft)] bg-white p-4 shadow-[0_10px_25px_rgba(58,44,25,0.06)]">
+                  <p className="text-[10px] font-black uppercase leading-none tracking-[0.26em] text-slate-400">Marcas</p>
+                  <p className="text-2xl font-black leading-none text-slate-900">{overview.counts.brands}</p>
+                </div>
+                <div className="flex min-h-[94px] flex-col justify-between rounded-[22px] border border-[var(--pf-border-soft)] bg-white p-4 shadow-[0_10px_25px_rgba(58,44,25,0.06)]">
+                  <p className="text-[10px] font-black uppercase leading-none tracking-[0.26em] text-slate-400">Usuarios</p>
+                  <p className="text-2xl font-black leading-none text-slate-900">{overview.counts.users}</p>
+                </div>
+                <div className="flex min-h-[94px] flex-col justify-between rounded-[22px] border border-[var(--pf-border-soft)] bg-white p-4 shadow-[0_10px_25px_rgba(58,44,25,0.06)]">
+                  <p className="text-[10px] font-black uppercase leading-none tracking-[0.26em] text-slate-400">Registro</p>
+                  <p className="text-2xl font-black leading-none text-slate-900">{totalCount}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 xl:flex-row xl:items-center">
+              <label className="flex h-14 flex-1 items-center rounded-full border border-[var(--pf-border-soft)] bg-white px-5 text-slate-500 shadow-[0_8px_22px_rgba(58,44,25,0.06)]">
+                <span className="text-sm">Buscar</span>
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  className="ml-3 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
+                  placeholder="Buscar por SKU, nombre, email o estado"
+                />
+              </label>
+
+              <button
+                type="button"
+                onClick={() => openNew(selectedTable)}
+                className="inline-flex h-14 items-center justify-center rounded-full bg-[linear-gradient(180deg,var(--pf-secondary-light)_0%,var(--pf-secondary)_100%)] px-6 text-sm font-black text-slate-900 shadow-[0_14px_30px_rgba(168,109,69,0.22)] transition hover:brightness-105"
+              >
+                {getCreateLabel(selectedTable)}
+              </button>
+
+              <Link
+                href="/"
+                className="inline-flex h-14 items-center justify-center rounded-full border border-transparent px-5 text-sm font-semibold text-slate-700 transition hover:bg-white/60"
+              >
+                Ir a la web
+              </Link>
+            </div>
+
+            <div className="mt-6">
+              <section className="rounded-[28px] border border-[var(--pf-border-soft)] bg-white/85 p-4 shadow-[0_16px_40px_rgba(58,44,25,0.08)]">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-[0.34em] text-[var(--pf-secondary)]">
+                      Contenido / {selectedTable.label}
+                    </p>
+                    <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">Listado de registros</h2>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="min-w-[120px] rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Activos</p>
+                      <p className="mt-1 text-xl font-black text-slate-900">{activeCount}</p>
+                    </div>
+                    <div className="min-w-[120px] rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Orden max</p>
+                      <p className="mt-1 text-xl font-black text-slate-900">{maxOrder}</p>
+                    </div>
+                    <div className="min-w-[120px] rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Total</p>
+                      <p className="mt-1 text-xl font-black text-slate-900">{totalCount}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 overflow-hidden rounded-[24px] border border-slate-200 bg-white">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[960px] w-full border-collapse">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          {selectedTable.columns.map((column) => (
+                            <th
+                              key={column.key}
+                              className="border-b border-slate-200 px-5 py-4 text-left text-[11px] font-black uppercase tracking-[0.24em] text-slate-400"
+                            >
+                              {column.label}
+                            </th>
+                          ))}
+                          <th className="border-b border-slate-200 px-5 py-4 text-left text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">
+                            Acciones
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visibleRows.map((row) => {
+                          const rowId = getRowId(selectedTable, row);
+                          const isSelected = rowId === selectedRowId;
+
+                          return (
+                            <tr
+                              key={rowId}
+                              className={`border-b border-slate-100 transition ${
+                                isSelected ? "bg-[#fff8ec]" : "hover:bg-[#fdf8ef]"
+                              }`}
+                            >
+                              {selectedTable.columns.map((column) => {
+                                const field = fieldMap.get(column.key);
+
+                                return (
+                                  <td key={column.key} className="px-5 py-4 align-top text-sm text-slate-700">
+                                    <div
+                                      className={
+                                        field?.kind === "boolean"
+                                          ? "inline-flex rounded-full bg-[rgba(168,109,69,0.12)] px-3 py-1 text-[11px] font-bold text-[var(--pf-primary-darker)]"
+                                          : "max-w-[15rem] break-words leading-6"
+                                      }
+                                    >
+                                      {formatCellValue(field, row[column.key])}
+                                    </div>
+                                  </td>
+                                );
+                              })}
+                              <td className="px-5 py-4 align-top">
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => openEdit(selectedTable, row)}
+                                    className="rounded-full border border-[var(--pf-border-soft)] bg-white px-4 py-2 text-xs font-bold text-[var(--pf-primary-darker)] transition hover:bg-[var(--pf-surface-warm)]"
+                                  >
+                                    Editar
+                                  </button>
+
+                                  <form
+                                    action={deleteAdminRecord}
+                                    onSubmit={(event) => {
+                                      if (!window.confirm(`Eliminar ${row[selectedTable.rowLabelField] ?? rowId}?`)) {
+                                        event.preventDefault();
+                                      }
+                                    }}
+                                  >
+                                    <input type="hidden" name="table" value={selectedTable.key} />
+                                    <input type="hidden" name="id" value={rowId} />
+                                    <button
+                                      type="submit"
+                                      className="rounded-full border border-[var(--pf-border-soft)] bg-white px-4 py-2 text-xs font-bold text-[var(--pf-wood-muted)] transition hover:bg-[var(--pf-surface-warm)]"
+                                    >
+                                      Borrar
+                                    </button>
+                                  </form>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {editor ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 px-4 py-6 backdrop-blur-sm"
+          onClick={closeEditor}
+        >
+          <div
+            className="max-h-[92vh] w-full max-w-5xl overflow-hidden rounded-[30px] border border-[var(--pf-border-soft)] bg-[#fbf8f1] shadow-[0_40px_120px_rgba(74,57,38,0.28)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.34em] text-[var(--pf-secondary)]">Edicion</p>
+                <h3 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
+                  {editor.rowId ? "Editar registro" : "Nuevo registro"}
+                </h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  {selectedTable.label} / {editor.rowId || "creacion"}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeEditor}
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <form action={handleSave} className="max-h-[calc(92vh-110px)] overflow-auto px-6 py-6">
+              <input type="hidden" name="table" value={editor.tableKey} />
+              <input type="hidden" name="payload_json" value={stringifyDraft(editor.draft)} />
+
+              <div className="grid gap-4 md:grid-cols-2">
+                {selectedTable.fields.map((field) => {
+                  const value = editor.draft[field.key];
+                  const fullWidth = field.kind === "textarea" || field.kind === "boolean";
+
+                  if (field.kind === "boolean") {
+                    return (
+                      <label
+                        key={field.key}
+                        className={`flex items-center justify-between rounded-[22px] border border-slate-200 bg-white px-4 py-4 ${
+                          fullWidth ? "md:col-span-2" : ""
+                        }`}
+                      >
+                        <div className="pr-4">
+                          <span className="block text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">
+                            {field.label}
+                          </span>
+                          {field.helper ? <span className="mt-1 block text-xs text-slate-500">{field.helper}</span> : null}
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(value)}
+                          onChange={(event) =>
+                            setEditor((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    draft: { ...current.draft, [field.key]: event.target.checked },
+                                  }
+                                : current,
+                            )
+                          }
+                          className="h-5 w-5 accent-[var(--pf-primary)]"
+                        />
+                      </label>
+                    );
+                  }
+
+                  if (field.kind === "textarea") {
+                    return (
+                      <label key={field.key} className={`block ${fullWidth ? "md:col-span-2" : ""}`}>
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <span className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">
+                            {field.label}
+                          </span>
+                          {field.helper ? <span className="text-xs text-slate-500">{field.helper}</span> : null}
+                        </div>
+                        <textarea
+                          value={String(value ?? "")}
+                          onChange={(event) =>
+                            setEditor((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    draft: { ...current.draft, [field.key]: event.target.value },
+                                  }
+                                : current,
+                            )
+                          }
+                          rows={5}
+                          className="w-full rounded-[22px] border border-[var(--pf-border-soft)] bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[var(--pf-primary)]"
+                          readOnly={field.readonly}
+                        />
+                      </label>
+                    );
+                  }
+
+                  return (
+                    <label key={field.key} className={`block ${fullWidth ? "md:col-span-2" : ""}`}>
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <span className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">
+                          {field.label}
+                        </span>
+                        {field.helper ? <span className="text-xs text-slate-500">{field.helper}</span> : null}
+                      </div>
+                      <input
+                        type={field.kind === "number" ? "number" : "text"}
+                        value={value == null ? "" : String(value)}
+                        onChange={(event) =>
+                          setEditor((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  draft: {
+                                    ...current.draft,
+                                    [field.key]: field.kind === "number" ? event.target.value : event.target.value,
+                                  },
+                                }
+                              : current,
+                          )
+                        }
+                        className="w-full rounded-[22px] border border-[var(--pf-border-soft)] bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[var(--pf-primary)]"
+                        readOnly={field.readonly}
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-5">
+                <button
+                  type="submit"
+                  className="rounded-full bg-[linear-gradient(180deg,var(--pf-secondary-light)_0%,var(--pf-secondary)_100%)] px-6 py-3 text-sm font-black text-slate-900 shadow-[0_14px_30px_rgba(168,109,69,0.22)] transition hover:brightness-105"
+                >
+                  Guardar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedRowId("");
+                    setEditor((current) =>
+                      current
+                        ? {
+                            ...current,
+                            draft: emptyDraftFor(selectedTable),
+                            rowId: "",
+                          }
+                        : current,
+                    );
+                  }}
+                  className="rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+                >
+                  Limpiar
+                </button>
+                <button
+                  type="button"
+                  onClick={closeEditor}
+                  className="rounded-full border border-transparent px-4 py-3 text-sm font-semibold text-slate-500 transition hover:text-slate-800"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+    </main>
+  );
+}
