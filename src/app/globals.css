@@ -2,7 +2,8 @@
 @plugin "daisyui";
 
 @theme inline {
-  --font-sans: var(--font-poppins);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-manrope);
   --font-mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
 }
 
@@ -103,7 +104,7 @@ body {
     radial-gradient(circle at top center, rgba(200, 176, 137, 0.18), transparent 28%),
     radial-gradient(circle at top right, rgba(232, 220, 200, 0.12), transparent 30%),
     linear-gradient(180deg, var(--pf-cream) 0%, var(--pf-sand-soft) 26%, var(--pf-bg) 58%, var(--pf-cream-soft) 100%);
-  font-family: var(--font-poppins), "Segoe UI", sans-serif;
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
 }
 
 body::before {
@@ -150,6 +151,9 @@ h4,
 h5,
 h6 {
   color: var(--pf-text);
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.04em;
 }
 
 button,

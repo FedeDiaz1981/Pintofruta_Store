@@ -5,6 +5,7 @@ import { FeaturedProductsCarousel } from "@/components/site/featured-products-ca
 import { HeroCarousel } from "@/components/site/hero-carousel";
 import { SectionHeading } from "@/components/site/section-heading";
 import { getHomePageViewModel } from "@/application/catalog";
+import { buttonVariants } from "@/components/ui/button";
 
 export default async function HomePage() {
   const content = await getHomePageViewModel();
@@ -18,7 +19,7 @@ export default async function HomePage() {
           eyebrow="Colección / destacados"
           title="Productos destacados"
           action={
-            <Link href="/galeria" className="btn btn-outline rounded-full normal-case">
+            <Link href="/galeria" className={buttonVariants({ variant: "outline", size: "md" })}>
               Ver catálogo
             </Link>
           }
@@ -38,7 +39,7 @@ export default async function HomePage() {
           eyebrow="Colección / tendencias"
           title="Tendencias"
           action={
-            <Link href="/galeria" className="btn btn-outline rounded-full normal-case">
+            <Link href="/galeria" className={buttonVariants({ variant: "outline", size: "md" })}>
               Ver catálogo
             </Link>
           }

@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProductItem } from "@/domain/site-content";
 import { formatCurrency, publicAsset } from "@/lib/catalog";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export function ProductDetailModal({
   product,
@@ -90,15 +93,12 @@ export function ProductDetailModal({
             <div className="flex flex-col gap-5 p-6 sm:p-8">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="text-3xl font-black tracking-tight text-[var(--pf-text)] sm:text-5xl">{product.name}</h3>
+                  <h3 className="text-3xl font-extrabold tracking-tight text-[var(--pf-text)] sm:text-5xl">{product.name}</h3>
                 </div>
                 <form method="dialog">
-                  <button
-                    className="btn btn-circle btn-sm border border-[var(--pf-border)] bg-[rgba(255,255,255,0.9)] text-[var(--pf-text)]"
-                    aria-label="Cerrar"
-                  >
+                  <Button type="submit" variant="secondary" size="icon" aria-label="Cerrar">
                     ×
-                  </button>
+                  </Button>
                 </form>
               </div>
 
@@ -107,11 +107,11 @@ export function ProductDetailModal({
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-[1.35rem] border border-[var(--pf-border)] bg-[rgba(255,255,255,0.8)] p-4">
                   <p className="text-xs uppercase tracking-[0.28em] text-[var(--pf-muted)]">Marca</p>
-                  <p className="mt-1 text-lg font-bold">{product.brand}</p>
+                  <p className="mt-1 text-lg font-semibold">{product.brand}</p>
                 </div>
                 <div className="rounded-[1.35rem] border border-[var(--pf-border)] bg-[rgba(255,255,255,0.8)] p-4">
                   <p className="text-xs uppercase tracking-[0.28em] text-[var(--pf-muted)]">Categoría</p>
-                  <p className="mt-1 text-lg font-bold">{product.categoryName}</p>
+                  <p className="mt-1 text-lg font-semibold">{product.categoryName}</p>
                 </div>
               </div>
 
@@ -122,15 +122,16 @@ export function ProductDetailModal({
                     <p className="mt-1 text-sm text-[var(--pf-muted)]">Elegí cuántas unidades querés agregar.</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
+                    <Button
                       type="button"
-                      className="btn btn-sm rounded-full border border-[var(--pf-border)] bg-[rgba(255,255,255,0.9)]"
+                      variant="secondary"
+                      size="sm"
                       onClick={() => setQuantity((current) => Math.max(1, current - 1))}
                       disabled={safeQuantity <= 1}
                     >
                       -
-                    </button>
-                    <input
+                    </Button>
+                    <Input
                       type="number"
                       min={1}
                       max={maxQuantity}
@@ -144,38 +145,39 @@ export function ProductDetailModal({
 
                         setQuantity(Math.min(Math.max(nextValue, 1), maxQuantity));
                       }}
-                      className="input input-bordered w-20 rounded-full text-center text-lg font-bold"
+                      className="w-20 text-center text-lg font-semibold"
                       aria-label="Cantidad"
                     />
-                    <button
+                    <Button
                       type="button"
-                      className="btn btn-sm rounded-full border border-[var(--pf-border)] bg-[rgba(255,255,255,0.9)]"
+                      variant="secondary"
+                      size="sm"
                       onClick={() => setQuantity((current) => Math.min(maxQuantity, current + 1))}
                       disabled={safeQuantity >= maxQuantity}
                     >
                       +
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
 
               <div className="rounded-[1.75rem] border border-[rgba(212,189,156,0.55)] bg-[rgba(237,220,195,0.55)] p-5">
                 <p className="text-xs uppercase tracking-[0.32em] text-[var(--pf-muted)]">Total</p>
-                <p className="mt-2 text-4xl font-black tracking-tight text-[var(--pf-text)]">{formatCurrency(totalPrice)}</p>
+                <p className="mt-2 text-4xl font-extrabold tracking-tight text-[var(--pf-text)]">{formatCurrency(totalPrice)}</p>
                 <p className="mt-1 text-sm text-[var(--pf-muted)]">
                   {safeQuantity} x {formatCurrency(product.publicPrice)}
                 </p>
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {product.vegano ? <span className="badge badge-outline badge-success">Vegano</span> : null}
-                {product.kosher ? <span className="badge badge-outline badge-info">Kosher</span> : null}
-                {product.testeadoEnAnimales === false ? <span className="badge badge-outline">Cruelty free</span> : null}
+                {product.vegano ? <Badge variant="outline" className="border-success/40 text-success">Vegano</Badge> : null}
+                {product.kosher ? <Badge variant="outline" className="border-info/40 text-info">Kosher</Badge> : null}
+                {product.testeadoEnAnimales === false ? <Badge variant="outline">Cruelty free</Badge> : null}
               </div>
 
               <div className="mt-auto flex flex-wrap gap-3">
-                <button className="btn pf-btn-rounded rounded-full normal-case">Agregar al carrito</button>
-                <Link href="/galeria" className="btn btn-outline rounded-full normal-case">
+                <Button className="rounded-full normal-case">Agregar al carrito</Button>
+                <Link href="/galeria" className={buttonVariants({ variant: "outline", size: "md" })}>
                   Seguir buscando
                 </Link>
               </div>

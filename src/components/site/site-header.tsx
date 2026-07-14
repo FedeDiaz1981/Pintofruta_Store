@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Search, ShoppingCart, UserRound } from "lucide-react";
 import { getDynamicHeaderMenus } from "@/application/catalog";
 import { publicAsset } from "@/lib/catalog";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export async function SiteHeader() {
   return <SiteHeaderContent />;
@@ -32,39 +34,37 @@ async function SiteHeaderContent() {
           <form action="/busqueda" method="get" className="w-full">
             <div className="overflow-hidden rounded-full border border-[var(--pf-border)] bg-[var(--pf-surface)] shadow-[var(--pf-shadow-soft)]">
               <div className="flex flex-col sm:flex-row">
-                <button
+                <Button
                   type="submit"
-                  className="inline-flex min-h-[52px] w-full items-center justify-center bg-[linear-gradient(180deg,var(--pf-primary),var(--pf-primary-dark))] px-4 text-white sm:w-[52px] sm:px-0"
+                  variant="primary"
+                  size="icon"
+                  className="min-h-[52px] w-full rounded-none sm:w-[52px]"
                   aria-label="Buscar"
                 >
                   <Search className="size-5" />
-                </button>
-                <input
+                </Button>
+                <Input
                   type="text"
                   name="q"
                   placeholder="Buscar"
-                  className="min-h-[52px] flex-1 border-0 bg-transparent px-4 text-[15px] text-[var(--pf-text)] outline-none placeholder:text-[var(--pf-muted)]"
+                  className="min-h-[52px] flex-1 rounded-none border-0 bg-transparent px-4 shadow-none focus:ring-0"
                 />
               </div>
             </div>
           </form>
 
           <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              className="btn btn-ghost btn-circle border border-[var(--pf-border)] bg-[var(--pf-surface)] shadow-[var(--pf-shadow-soft)]"
-              aria-label="Cuenta"
-            >
+            <Button type="button" variant="secondary" size="icon" aria-label="Cuenta">
               <UserRound className="size-4" />
-            </button>
+            </Button>
             <Link
               href="/carrito"
-              className="btn btn-ghost btn-circle border border-[var(--pf-border)] bg-[rgba(255,255,255,0.72)] shadow-[var(--pf-shadow-soft)]"
+              className={buttonVariants({ variant: "secondary", size: "icon" })}
               aria-label="Carrito"
             >
               <ShoppingCart className="size-4" />
             </Link>
-            <Link href="/admin" className="btn pf-btn-rounded hidden rounded-full px-5 lg:inline-flex">
+            <Link href="/admin" className={`${buttonVariants({ variant: "primary", size: "md" })} hidden lg:inline-flex`}>
               Admin demo
             </Link>
           </div>
@@ -74,9 +74,11 @@ async function SiteHeaderContent() {
       <div className="border-b border-[var(--pf-border-soft)] bg-white/90 shadow-[0_1px_1px_hsla(0,0%,0%,0.06),0_2px_2px_hsla(0,0%,0%,0.06)]">
         <div className="pf-shell px-4 lg:px-12">
           <nav className="grid grid-cols-2 border-x border-[var(--pf-border-soft)] bg-white">
-            {menus.map((menu) => (
-              <details key={menu.key} className="dropdown dropdown-bottom dropdown-center relative">
-                <summary className="flex min-h-[64px] cursor-pointer list-none items-center justify-center border-y border-[var(--pf-border-soft)] bg-white px-4 text-sm font-medium uppercase tracking-[0.18em] text-[var(--pf-text)] transition hover:bg-[rgba(248,242,232,0.7)] [&::-webkit-details-marker]:hidden">
+              {menus.map((menu) => (
+                <details key={menu.key} className="dropdown dropdown-bottom dropdown-center relative">
+                <summary
+                  className={`${buttonVariants({ variant: "secondary", size: "md" })} flex min-h-[64px] cursor-pointer list-none justify-center rounded-none border-y border-[var(--pf-border-soft)] bg-white px-4 text-sm font-medium uppercase tracking-[0.18em] hover:bg-[rgba(248,242,232,0.7)] [&::-webkit-details-marker]:hidden`}
+                >
                   {menu.label}
                 </summary>
                 <div className="dropdown-content z-[10060] mt-3 w-[min(92vw,1100px)] rounded-[1.75rem] border border-[var(--pf-border)] bg-[var(--pf-surface)] p-4 shadow-[0_24px_60px_rgba(74,57,38,0.16)]">

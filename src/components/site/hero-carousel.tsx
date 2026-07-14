@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { HeroSlide } from "@/domain/site-content";
 import { publicAsset } from "@/lib/catalog";
+import { buttonVariants } from "@/components/ui/button";
 
 export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
   return (
@@ -23,16 +24,19 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
             <div className="absolute inset-0 bg-gradient-to-r from-base-100/90 via-base-100/70 to-transparent" />
             <div className="relative z-10 flex min-h-[420px] items-center px-6 py-10 sm:px-12 lg:px-16">
               <div className="max-w-2xl">
-                <span className="inline-flex rounded-full bg-secondary/15 px-4 py-2 text-xs font-black uppercase tracking-[0.3em] text-secondary">
+                <span className="inline-flex rounded-full bg-secondary/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-secondary">
                   {slide.badge}
                 </span>
-                <h1 className="mt-5 text-4xl font-black tracking-tight text-base-content sm:text-6xl">{slide.title}</h1>
-                <p className="mt-4 max-w-xl text-lg leading-8 text-base-content/75">{slide.subtitle}</p>
+                <h1 className="mt-5 text-4xl font-extrabold tracking-tight text-base-content sm:text-6xl">{slide.title}</h1>
+                <p className="mt-4 max-w-xl text-lg leading-8 text-base-content/78">{slide.subtitle}</p>
                 <div className="mt-8 flex flex-wrap gap-3">
-                  <Link href={slide.link.replace("galeria.html", "/galeria").replace("busqueda.html", "/busqueda")} className="btn btn-primary rounded-full normal-case">
+                  <Link
+                    href={slide.link.replace("galeria.html", "/galeria").replace("busqueda.html", "/busqueda")}
+                    className={buttonVariants({ variant: "primary", size: "lg" })}
+                  >
                     Ir a la galería
                   </Link>
-                  <Link href="/busqueda" className="btn btn-ghost rounded-full normal-case">
+                  <Link href="/busqueda" className={buttonVariants({ variant: "ghost", size: "lg" })}>
                     Buscar productos
                   </Link>
                 </div>

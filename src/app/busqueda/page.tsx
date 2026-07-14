@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CatalogGrid } from "@/components/site/catalog-grid";
 import { SectionHeading } from "@/components/site/section-heading";
 import { searchCatalog } from "@/application/catalog";
+import { buttonVariants } from "@/components/ui/button";
 
 export default function SearchPage({
   searchParams,
@@ -30,7 +31,7 @@ async function SearchPageContent({
         title="Resultados dinámicos"
         description="La búsqueda ya filtra por texto, marca y categoría desde la capa de aplicación."
         action={
-          <Link href="/galeria" className="btn btn-outline rounded-full normal-case">
+          <Link href="/galeria" className={buttonVariants({ variant: "outline", size: "md" })}>
             Ver todo
           </Link>
         }

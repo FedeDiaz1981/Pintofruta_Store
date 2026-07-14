@@ -6,6 +6,7 @@ import { useState, useRef } from "react";
 import type { ProductItem } from "@/domain/site-content";
 import { publicAsset } from "@/lib/catalog";
 import { ProductDetailModal } from "@/components/site/product-detail-modal";
+import { Button } from "@/components/ui/button";
 
 function getDiscountLabel(product: ProductItem) {
   if (!product.memberPrice || product.memberPrice <= 0 || product.memberPrice >= product.publicPrice) {
@@ -72,23 +73,27 @@ export function FeaturedProductsCarousel({ products }: { products: ProductItem[]
 
   return (
     <div className="relative">
-      <button
+      <Button
         type="button"
         onClick={() => scrollByCards(-1)}
-        className="absolute left-0 top-1/2 z-20 -translate-x-2 -translate-y-1/2 rounded-full border border-[rgba(74,57,38,0.14)] bg-white p-3 text-[var(--pf-text)] shadow-[0_16px_30px_rgba(74,57,38,0.16)] transition hover:bg-[var(--pf-surface-warm)] hover:scale-105"
+        variant="secondary"
+        size="icon"
+        className="absolute left-0 top-1/2 z-20 -translate-x-2 -translate-y-1/2 transition hover:scale-105"
         aria-label="Ver productos anteriores"
       >
         <ChevronLeft className="size-6" />
-      </button>
+      </Button>
 
-      <button
+      <Button
         type="button"
         onClick={() => scrollByCards(1)}
-        className="absolute right-0 top-1/2 z-20 translate-x-2 -translate-y-1/2 rounded-full border border-[rgba(74,57,38,0.14)] bg-white p-3 text-[var(--pf-text)] shadow-[0_16px_30px_rgba(74,57,38,0.16)] transition hover:bg-[var(--pf-surface-warm)] hover:scale-105"
+        variant="secondary"
+        size="icon"
+        className="absolute right-0 top-1/2 z-20 translate-x-2 -translate-y-1/2 transition hover:scale-105"
         aria-label="Ver productos siguientes"
       >
         <ChevronRight className="size-6" />
-      </button>
+      </Button>
 
       <div
         ref={trackRef}
