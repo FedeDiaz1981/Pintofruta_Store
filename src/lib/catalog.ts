@@ -26,3 +26,31 @@ export function normalizeText(value: string | null | undefined) {
     .toLowerCase();
 }
 
+export function isNewArrival({
+  createdAt,
+  updatedAt,
+  days = 7,
+}: {
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  days?: number;
+}) {
+  if (!createdAt) {
+    return false;
+  }
+
+  const created = new Date(createdAt);
+  if (Number.isNaN(created.getTime())) {
+    return false;
+  }
+
+  if (updatedAt) {
+    const updated = new Date(updatedAt);
+    if (!Number.isNaN(updated.getTime()) && updated.getTime() - created.getTime() > 60_000) {
+      return false;
+    }
+  }
+
+  const ageMs = Date.now() - created.getTime();
+  return ageMs <= days * 24 * 60 * 60 * 1000;
+}

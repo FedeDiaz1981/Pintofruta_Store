@@ -106,7 +106,11 @@ export const siteContentSchemaSql = `
     trending boolean,
     stock integer,
     description text,
-    source_section text
+    source_section text,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
   );
-`;
 
+  alter table products add column if not exists created_at timestamptz not null default now();
+  alter table products add column if not exists updated_at timestamptz not null default now();
+`;

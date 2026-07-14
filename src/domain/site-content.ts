@@ -69,6 +69,8 @@ export interface ProductItem {
   stock?: number;
   description?: string;
   sourceSection?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CategoryItem {
@@ -121,6 +123,7 @@ export interface SiteContentDocument {
 export interface HomePageViewModel {
   banners: BannerItem[];
   heroSlides: HeroSlide[];
+  spotlightSlide: HeroSlide | null;
   featuredBanner: BannerItem | null;
   secondaryBanner: BannerItem | null;
   brands: BrandItem[];
@@ -137,4 +140,6 @@ export interface CatalogFilters {
   query?: string;
   brand?: string;
   category?: string;
+  featuredOnly?: boolean;
+  trendingOnly?: boolean;
 }

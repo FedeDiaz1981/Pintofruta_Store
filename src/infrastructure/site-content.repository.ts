@@ -250,7 +250,7 @@ export async function getSiteContent(): Promise<SiteContentDocument> {
     );
     const productRows = await readRows<ProductRow>(
       client,
-      "select id, sku, name, detail, presentation, category_id, category_name, brand, vegano, kosher, testeado_en_animales, public_price, member_price, image, status, featured, trending, stock, description, source_section from products order by id",
+      "select id, sku, name, detail, presentation, category_id, category_name, brand, vegano, kosher, testeado_en_animales, public_price, member_price, image, status, featured, trending, stock, description, source_section, created_at, updated_at from products order by id",
     );
     const brandRows = await readRows<BrandRow>(
       client,

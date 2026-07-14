@@ -24,6 +24,22 @@ export interface DynamicHeaderMenu {
   groups: DynamicMenuGroup[];
 }
 
+export interface CatalogFacetOption {
+  label: string;
+  value: string;
+  count: number;
+}
+
+export interface GalleryPageViewModel {
+  products: ProductItem[];
+  brands: CatalogFacetOption[];
+  categories: CatalogFacetOption[];
+  activeBrand: string;
+  activeCategory: string;
+  query: string;
+  totalProducts: number;
+}
+
 function getAlphabetPair(initial: string) {
   const normalized = initial.toUpperCase();
   if (normalized < "A" || normalized > "Z") {
@@ -88,6 +104,53 @@ function buildDynamicMenu<T extends { name: string }>(
   };
 }
 
+function filterCatalogProducts(products: ProductItem[], filters: CatalogFilters = {}) {
+  const query = normalizeText(filters.query);
+  const brand = normalizeText(filters.brand);
+  const category = normalizeText(filters.category);
+
+  return products.filter((item) => {
+    if (item.status !== "published") {
+      return false;
+    }
+
+    const matchesQuery =
+      !query ||
+      normalizeText(item.name).includes(query) ||
+      normalizeText(item.detail).includes(query) ||
+      normalizeText(item.brand).includes(query) ||
+      normalizeText(item.categoryName).includes(query) ||
+      normalizeText(item.sku).includes(query);
+    const matchesBrand = !brand || normalizeText(item.brand).includes(brand);
+    const matchesCategory = !category || normalizeText(item.categoryName).includes(category);
+
+    return matchesQuery && matchesBrand && matchesCategory;
+  });
+}
+
+function buildFacetOptions(
+  products: ProductItem[],
+  selector: (product: ProductItem) => string,
+): CatalogFacetOption[] {
+  const counts = new Map<string, number>();
+
+  for (const product of products) {
+    const value = selector(product).trim();
+    if (!value) {
+      continue;
+    }
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right, "es", { sensitivity: "base" }))
+    .map(([label, count]) => ({
+      label,
+      value: label,
+      count,
+    }));
+}
+
 export async function getDynamicHeaderMenus(): Promise<DynamicHeaderMenu[]> {
   const content = await getSiteContent();
 
@@ -113,6 +176,7 @@ export async function getHomePageViewModel(): Promise<HomePageViewModel> {
   const heroSlides = [...content.heroSlides]
     .filter((item) => item.active)
     .sort((a, b) => a.order - b.order);
+  const spotlightSlide = heroSlides.find((item) => item.homeSpotlight) ?? heroSlides[0] ?? null;
   const featuredProducts = content.products
     .filter((item) => item.status === "published" && item.featured)
     .slice(0, 8);
@@ -125,6 +189,7 @@ export async function getHomePageViewModel(): Promise<HomePageViewModel> {
   return {
     banners,
     heroSlides,
+    spotlightSlide,
     featuredBanner: banners[0] ?? null,
     secondaryBanner: banners[1] ?? null,
     brands,
@@ -149,25 +214,35 @@ export async function getProductBySku(sku: string): Promise<ProductItem | null> 
 
 export async function searchCatalog(filters: CatalogFilters = {}) {
   const content = await getSiteContent();
-  const query = normalizeText(filters.query);
-  const brand = normalizeText(filters.brand);
-  const category = normalizeText(filters.category);
+  return filterCatalogProducts(content.products, filters);
+}
 
-  return content.products.filter((item) => {
-    if (item.status !== "published") {
+export async function getGalleryPageViewModel(filters: CatalogFilters = {}): Promise<GalleryPageViewModel> {
+  const content = await getSiteContent();
+  const baseProducts = content.products.filter((product) => {
+    if (product.status !== "published") {
       return false;
     }
 
-    const matchesQuery =
-      !query ||
-      normalizeText(item.name).includes(query) ||
-      normalizeText(item.detail).includes(query) ||
-      normalizeText(item.brand).includes(query) ||
-      normalizeText(item.categoryName).includes(query) ||
-      normalizeText(item.sku).includes(query);
-    const matchesBrand = !brand || normalizeText(item.brand).includes(brand);
-    const matchesCategory = !category || normalizeText(item.categoryName).includes(category);
+    if (filters.featuredOnly && !product.featured) {
+      return false;
+    }
 
-    return matchesQuery && matchesBrand && matchesCategory;
+    if (filters.trendingOnly && !product.trending) {
+      return false;
+    }
+
+    return true;
   });
+  const publishedProducts = filterCatalogProducts(baseProducts);
+
+  return {
+    products: filterCatalogProducts(baseProducts, filters),
+    brands: buildFacetOptions(publishedProducts, (product) => product.brand),
+    categories: buildFacetOptions(publishedProducts, (product) => product.categoryName),
+    activeBrand: filters.brand ? normalizeText(filters.brand) : "",
+    activeCategory: filters.category ? normalizeText(filters.category) : "",
+    query: filters.query ? filters.query.trim() : "",
+    totalProducts: publishedProducts.length,
+  };
 }

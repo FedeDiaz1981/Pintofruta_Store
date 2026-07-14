@@ -124,6 +124,8 @@ export function mapSiteContentDocument(params: {
       stock: product.stock ?? undefined,
       description: product.description ?? undefined,
       sourceSection: product.source_section ?? undefined,
+      createdAt: product.created_at ?? undefined,
+      updatedAt: product.updated_at ?? undefined,
     })),
     brands: brands.map((brand) => ({
       id: brand.id,

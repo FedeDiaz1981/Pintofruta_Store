@@ -117,7 +117,8 @@ async function saveProduct(record: PayloadRecord) {
         trending = excluded.trending,
         stock = excluded.stock,
         description = excluded.description,
-        source_section = excluded.source_section
+        source_section = excluded.source_section,
+        updated_at = now()
     `,
     [
       id,

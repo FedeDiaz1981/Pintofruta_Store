@@ -110,6 +110,8 @@ export type SeedProduct = {
   stock: number | null;
   description: string | null;
   source_section: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 export function toSeedNavigationRows() {
