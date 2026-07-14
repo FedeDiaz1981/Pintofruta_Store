@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Search, ShoppingCart, UserRound } from "lucide-react";
 import { getDynamicHeaderMenus } from "@/application/catalog";
+import { CartButton } from "@/components/cart/cart-button";
 import { publicAsset } from "@/lib/catalog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,11 +60,14 @@ async function SiteHeaderContent() {
             </Button>
             <Link
               href="/carrito"
-              className={buttonVariants({ variant: "secondary", size: "icon" })}
+              className={`${buttonVariants({ variant: "secondary", size: "icon" })} lg:hidden`}
               aria-label="Carrito"
             >
               <ShoppingCart className="size-4" />
             </Link>
+            <div className="hidden lg:block">
+              <CartButton />
+            </div>
             <Link href="/admin" className={`${buttonVariants({ variant: "primary", size: "md" })} hidden lg:inline-flex`}>
               Admin demo
             </Link>

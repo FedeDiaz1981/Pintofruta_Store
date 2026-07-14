@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProductBySku } from "@/application/catalog";
+import { CartAddButton } from "@/components/cart/cart-add-button";
 import { formatCurrency, publicAsset } from "@/lib/catalog";
 import { buttonVariants } from "@/components/ui/button";
 
@@ -57,7 +58,9 @@ export default async function ProductPage({
           </div>
 
           <div className="mt-auto flex flex-wrap gap-3">
-            <button className={buttonVariants({ variant: "primary", size: "md" })}>Agregar al carrito</button>
+            <CartAddButton product={product} className={buttonVariants({ variant: "primary", size: "md" })}>
+              Agregar al pedido
+            </CartAddButton>
             <Link href="/busqueda" className={buttonVariants({ variant: "ghost", size: "md" })}>
               Seguir buscando
             </Link>

@@ -1,12 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CartAddButton } from "@/components/cart/cart-add-button";
 import type { ProductItem } from "@/domain/site-content";
 import { formatCurrency, publicAsset } from "@/lib/catalog";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export function ProductDetailModal({
@@ -15,9 +15,11 @@ export function ProductDetailModal({
 }: {
   product: ProductItem | null;
   onClose: () => void;
-}) {
+  }) {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
+  const addTimerRef = useRef<number | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [isAdding, setIsAdding] = useState(false);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -52,6 +54,14 @@ export function ProductDetailModal({
       dialog.removeEventListener("close", handleClose);
     };
   }, [onClose]);
+
+  useEffect(() => {
+    return () => {
+      if (addTimerRef.current !== null) {
+        window.clearTimeout(addTimerRef.current);
+      }
+    };
+  }, []);
 
   const maxQuantity = useMemo(() => {
     if (!product?.stock || product.stock <= 0) {
@@ -176,10 +186,24 @@ export function ProductDetailModal({
               </div>
 
               <div className="mt-auto flex flex-wrap gap-3">
-                <Button className="rounded-full normal-case">Agregar al carrito</Button>
-                <Link href="/galeria" className={buttonVariants({ variant: "outline", size: "md" })}>
-                  Seguir buscando
-                </Link>
+                <CartAddButton
+                  product={product}
+                  quantity={safeQuantity}
+                  className={`rounded-full normal-case transition duration-300 ${isAdding ? "scale-[0.98] brightness-110" : ""}`}
+                  onClick={() => {
+                    setIsAdding(true);
+
+                    if (addTimerRef.current !== null) {
+                      window.clearTimeout(addTimerRef.current);
+                    }
+
+                    addTimerRef.current = window.setTimeout(() => {
+                      onClose();
+                    }, 220);
+                  }}
+                >
+                  {isAdding ? "Agregado" : "Agregar al pedido"}
+                </CartAddButton>
               </div>
             </div>
           </div>
