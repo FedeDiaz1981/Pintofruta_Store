@@ -1,11 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useRef } from "react";
+import { useState, useRef } from "react";
 import type { ProductItem } from "@/domain/site-content";
 import { publicAsset } from "@/lib/catalog";
+import { ProductDetailModal } from "@/components/site/product-detail-modal";
 
 function getDiscountLabel(product: ProductItem) {
   if (!product.memberPrice || product.memberPrice <= 0 || product.memberPrice >= product.publicPrice) {
@@ -48,6 +48,7 @@ function ProductSeal({ label }: { label: string }) {
 
 export function FeaturedProductsCarousel({ products }: { products: ProductItem[] }) {
   const trackRef = useRef<HTMLDivElement | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
 
   const scrollByCards = (direction: number) => {
     const track = trackRef.current;
@@ -97,12 +98,11 @@ export function FeaturedProductsCarousel({ products }: { products: ProductItem[]
           const discountLabel = getDiscountLabel(product);
           const inventoryLabel = getInventoryLabel(product);
           const isOutOfStock = product.stock != null ? product.stock <= 0 : product.status !== "published";
-          const href = `/producto/${encodeURIComponent(product.sku)}`;
-
           return (
-            <Link
+            <button
               key={product.id}
-              href={href}
+              type="button"
+              onClick={() => setSelectedProduct(product)}
               className="group block w-[min(82vw,18rem)] shrink-0 snap-start sm:w-[18.5rem] lg:w-[19rem]"
             >
               <article
@@ -145,10 +145,16 @@ export function FeaturedProductsCarousel({ products }: { products: ProductItem[]
                   </p>
                 </div>
               </article>
-            </Link>
+            </button>
           );
         })}
       </div>
+
+      <ProductDetailModal
+        key={selectedProduct?.id ?? "empty"}
+        product={selectedProduct}
+        onClose={() => setSelectedProduct(null)}
+      />
     </div>
   );
 }
