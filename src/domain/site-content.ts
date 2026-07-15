@@ -153,6 +153,7 @@ export interface HomePageViewModel {
   brands: BrandItem[];
   featuredProducts: ProductItem[];
   trendingProducts: ProductItem[];
+  activePromotions: PackItem[];
   featuredBrands: BrandItem[];
   stats: {
     label: string;

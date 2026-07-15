@@ -15,11 +15,13 @@ export function ProductDetailModal({
 }: {
   product: ProductItem | null;
   onClose: () => void;
-  }) {
+}) {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
+  const detailsDialogRef = useRef<HTMLDialogElement | null>(null);
   const addTimerRef = useRef<number | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [isAdding, setIsAdding] = useState(false);
+  const [showFullDetails, setShowFullDetails] = useState(false);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -56,6 +58,40 @@ export function ProductDetailModal({
   }, [onClose]);
 
   useEffect(() => {
+    const dialog = detailsDialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (!product || !showFullDetails) {
+      if (dialog.open) {
+        dialog.close();
+      }
+      return;
+    }
+
+    if (!dialog.open) {
+      dialog.showModal();
+    }
+  }, [product, showFullDetails]);
+
+  useEffect(() => {
+    const dialog = detailsDialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    const handleClose = () => setShowFullDetails(false);
+    dialog.addEventListener("close", handleClose);
+
+    return () => {
+      dialog.removeEventListener("close", handleClose);
+    };
+  }, []);
+
+  useEffect(() => {
     return () => {
       if (addTimerRef.current !== null) {
         window.clearTimeout(addTimerRef.current);
@@ -70,6 +106,13 @@ export function ProductDetailModal({
 
     return product.stock;
   }, [product]);
+
+  const fullDescription = (product?.description || product?.detail || "").trim();
+  const truncatedDescriptionLimit = 180;
+  const shouldTruncateDescription = fullDescription.length > truncatedDescriptionLimit;
+  const shortDescription = shouldTruncateDescription
+    ? `${fullDescription.slice(0, truncatedDescriptionLimit).trimEnd()}...`
+    : fullDescription;
 
   const safeQuantity = Math.min(Math.max(quantity, 1), maxQuantity);
   const totalPrice = product ? product.publicPrice * safeQuantity : 0;
@@ -112,18 +155,20 @@ export function ProductDetailModal({
                 </form>
               </div>
 
-              <p className="max-w-2xl text-base leading-7 text-[var(--pf-muted)]">{product.description || product.detail}</p>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[1.35rem] border border-[var(--pf-border)] bg-[rgba(255,255,255,0.8)] p-4">
-                  <p className="text-xs uppercase tracking-[0.28em] text-[var(--pf-muted)]">Marca</p>
-                  <p className="mt-1 text-lg font-semibold">{product.brand}</p>
+              {fullDescription ? (
+                <div className="max-w-2xl text-base leading-7 text-[var(--pf-muted)]">
+                  <p>{shortDescription}</p>
+                  {shouldTruncateDescription ? (
+                    <button
+                      type="button"
+                      className="mt-2 inline-flex items-center text-sm font-semibold text-[var(--pf-accent)] underline decoration-[rgba(168,109,69,0.45)] underline-offset-4 transition hover:opacity-80"
+                      onClick={() => setShowFullDetails(true)}
+                    >
+                      Ver más
+                    </button>
+                  ) : null}
                 </div>
-                <div className="rounded-[1.35rem] border border-[var(--pf-border)] bg-[rgba(255,255,255,0.8)] p-4">
-                  <p className="text-xs uppercase tracking-[0.28em] text-[var(--pf-muted)]">Categoría</p>
-                  <p className="mt-1 text-lg font-semibold">{product.categoryName}</p>
-                </div>
-              </div>
+              ) : null}
 
               <div className="rounded-[1.5rem] border border-[var(--pf-border)] bg-[rgba(255,255,255,0.8)] p-4">
                 <div className="flex items-center justify-between gap-4">
@@ -180,6 +225,12 @@ export function ProductDetailModal({
               </div>
 
               <div className="flex flex-wrap gap-2">
+                <Badge variant="outline" className="border-[rgba(168,109,69,0.22)] text-[var(--pf-text)]">
+                  {product.brand}
+                </Badge>
+                <Badge variant="outline" className="border-[rgba(168,109,69,0.22)] text-[var(--pf-text)]">
+                  {product.categoryName}
+                </Badge>
                 {product.vegano ? <Badge variant="outline" className="border-success/40 text-success">Vegano</Badge> : null}
                 {product.kosher ? <Badge variant="outline" className="border-info/40 text-info">Kosher</Badge> : null}
                 {product.testeadoEnAnimales === false ? <Badge variant="outline">Cruelty free</Badge> : null}
@@ -213,6 +264,38 @@ export function ProductDetailModal({
       <form method="dialog" className="modal-backdrop">
         <button aria-label="Cerrar" />
       </form>
+
+      <dialog
+        ref={detailsDialogRef}
+        className="modal modal-bottom sm:modal-middle"
+        onClick={(event) => {
+          if (event.target === detailsDialogRef.current) {
+            detailsDialogRef.current?.close();
+          }
+        }}
+      >
+        <div className="modal-box max-w-3xl overflow-hidden rounded-[2rem] border border-[var(--pf-border-warm)] bg-[var(--pf-surface)] p-0 text-[var(--pf-text)] shadow-[0_30px_80px_rgba(74,57,38,0.26)]">
+          <div className="flex items-start justify-between gap-4 border-b border-[rgba(168,109,69,0.12)] p-6 sm:p-8">
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-[var(--pf-muted)]">Detalle completo</p>
+              <h3 className="mt-2 text-2xl font-extrabold tracking-tight sm:text-4xl">{product?.name}</h3>
+            </div>
+            <form method="dialog">
+              <Button type="submit" variant="secondary" size="icon" aria-label="Cerrar detalle completo">
+                Ã—
+              </Button>
+            </form>
+          </div>
+
+          <div className="max-h-[70vh] overflow-y-auto p-6 text-base leading-7 text-[var(--pf-muted)] sm:p-8">
+            <p className="whitespace-pre-line">{fullDescription}</p>
+          </div>
+        </div>
+
+        <form method="dialog" className="modal-backdrop">
+          <button aria-label="Cerrar detalle completo" />
+        </form>
+      </dialog>
     </dialog>
   );
 }

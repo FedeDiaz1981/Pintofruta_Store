@@ -4,6 +4,7 @@ import { getHomePageViewModel } from "@/application/catalog";
 import { BrandLogoWall } from "@/components/site/brand-logo-wall";
 import { FeaturedProductsCarousel } from "@/components/site/featured-products-carousel";
 import { HeroCarousel } from "@/components/site/hero-carousel";
+import { PromotionCarousel } from "@/components/site/promotion-carousel";
 import { SectionHeading } from "@/components/site/section-heading";
 import { SpotlightBanner } from "@/components/site/spotlight-banner";
 import { buttonVariants } from "@/components/ui/button";
@@ -42,17 +43,17 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section id="trending-products" className="space-y-5">
+        <section id="promociones" className="space-y-5">
           <SectionHeading
-            eyebrow="Colección / tendencias"
-            title="Tendencias"
+            eyebrow="Colección / promociones"
+            title="Promociones"
             action={
-              <Link href="/galeria?trending=1" className={buttonVariants({ variant: "outline", size: "md" })}>
+              <Link href="/galeria?type=packs" className={buttonVariants({ variant: "outline", size: "md" })}>
                 Ver todos
               </Link>
             }
           />
-          <FeaturedProductsCarousel products={content.trendingProducts} />
+          <PromotionCarousel promotions={content.activePromotions} />
         </section>
 
         <section

@@ -222,6 +222,9 @@ export async function getHomePageViewModel(): Promise<HomePageViewModel> {
   const trendingProducts = content.products
     .filter((item) => item.status === "published" && item.trending)
     .slice(0, 8);
+  const activePromotions = [...(content.packs ?? [])]
+    .filter((item) => item.active)
+    .sort((left, right) => (left.order ?? 0) - (right.order ?? 0) || left.title.localeCompare(right.title, "es", { sensitivity: "base" }));
   const brands = [...content.brands];
   const featuredBrands = content.brands.filter((item) => item.featured).slice(0, 6);
 
@@ -234,6 +237,7 @@ export async function getHomePageViewModel(): Promise<HomePageViewModel> {
     brands,
     featuredProducts,
     trendingProducts,
+    activePromotions,
     featuredBrands,
     stats: [
       { label: "marcas", value: String(content.brands.length) },
