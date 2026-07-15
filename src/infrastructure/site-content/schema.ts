@@ -113,4 +113,30 @@ export const siteContentSchemaSql = `
 
   alter table products add column if not exists created_at timestamptz not null default now();
   alter table products add column if not exists updated_at timestamptz not null default now();
+
+  create table if not exists promotion_packs (
+    id integer primary key,
+    apodo text not null unique,
+    title text not null,
+    description text not null,
+    category text not null,
+    public_price integer not null,
+    image text,
+    active boolean not null,
+    featured boolean not null,
+    order_index integer not null,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+  );
+
+  create table if not exists promotion_pack_items (
+    pack_id integer not null references promotion_packs(id) on delete cascade,
+    product_id integer not null references products(id) on delete cascade,
+    quantity integer not null default 1,
+    order_index integer not null,
+    primary key (pack_id, product_id)
+  );
+
+  alter table promotion_packs add column if not exists created_at timestamptz not null default now();
+  alter table promotion_packs add column if not exists updated_at timestamptz not null default now();
 `;

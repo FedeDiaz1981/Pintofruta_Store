@@ -1,4 +1,4 @@
-import type { HeaderNavigation, SiteContentDocument } from "@/domain/site-content";
+import type { HeaderNavigation, PackIncludedProduct, PackItem, ProductItem, SiteContentDocument } from "@/domain/site-content";
 import type {
   SeedBanner,
   SeedBrand,
@@ -24,6 +24,26 @@ export type ProductRow = SeedProduct;
 export type BrandRow = SeedBrand;
 export type CategoryRow = SeedCategory;
 export type UserRow = SeedUser;
+export type PackRow = {
+  id: number;
+  apodo: string;
+  title: string;
+  description: string;
+  category: string;
+  public_price: number;
+  image: string | null;
+  active: boolean;
+  featured: boolean;
+  order_index: number;
+  created_at: string | null;
+  updated_at: string | null;
+};
+export type PackItemRow = {
+  pack_id: number;
+  product_id: number;
+  quantity: number;
+  order_index: number;
+};
 
 export function mapHeaderNavigation(
   scopesRows: SearchScopeRow[],
@@ -72,11 +92,81 @@ export function mapSiteContentDocument(params: {
   heroSlides: HeroSlideRow[];
   banners: BannerRow[];
   products: ProductRow[];
+  packs?: PackRow[];
+  packItems?: PackItemRow[];
   brands: BrandRow[];
   categories: CategoryRow[];
   users: UserRow[];
 }): SiteContentDocument {
-  const { metaRow, headerNavigation, heroSlides, banners, products, brands, categories, users } = params;
+  const { metaRow, headerNavigation, heroSlides, banners, products, packs = [], packItems = [], brands, categories, users } = params;
+  const productMap = new Map<number, ProductItem>();
+
+  const mappedProducts = products.map((product) => {
+    const mapped: ProductItem = {
+      id: product.id,
+      sku: product.sku,
+      name: product.name,
+      detail: product.detail,
+      presentation: product.presentation,
+      categoryId: product.category_id,
+      categoryName: product.category_name,
+      brand: product.brand,
+      vegano: product.vegano,
+      kosher: product.kosher,
+      testeadoEnAnimales: product.testeado_en_animales ?? undefined,
+      publicPrice: product.public_price,
+      memberPrice: product.member_price,
+      image: product.image ?? undefined,
+      status: product.status,
+      featured: product.featured,
+      trending: product.trending ?? undefined,
+      stock: product.stock ?? undefined,
+      description: product.description ?? undefined,
+      sourceSection: product.source_section ?? undefined,
+      createdAt: product.created_at ?? undefined,
+      updatedAt: product.updated_at ?? undefined,
+    };
+
+    productMap.set(mapped.id, mapped);
+    return mapped;
+  });
+
+  const mappedPacks: PackItem[] = packs.map((pack) => {
+    const itemRows = packItems
+      .filter((item) => item.pack_id === pack.id)
+      .sort((left, right) => left.order_index - right.order_index);
+
+    const items: PackIncludedProduct[] = itemRows
+      .map((item) => {
+        const product = productMap.get(item.product_id);
+        if (!product) {
+          return null;
+        }
+
+        return {
+          productId: item.product_id,
+          quantity: item.quantity,
+          product,
+        };
+      })
+      .filter((item): item is PackIncludedProduct => Boolean(item));
+
+    return {
+      id: pack.id,
+      apodo: pack.apodo,
+      title: pack.title,
+      description: pack.description,
+      category: pack.category,
+      publicPrice: pack.public_price,
+      image: pack.image ?? undefined,
+      active: pack.active,
+      featured: pack.featured,
+      order: pack.order_index,
+      items,
+      createdAt: pack.created_at ?? undefined,
+      updatedAt: pack.updated_at ?? undefined,
+    };
+  });
 
   return {
     sessionRole: metaRow?.session_role ?? undefined,
@@ -103,30 +193,8 @@ export function mapSiteContentDocument(params: {
       order: banner.order_index,
       active: banner.active,
     })),
-    products: products.map((product) => ({
-      id: product.id,
-      sku: product.sku,
-      name: product.name,
-      detail: product.detail,
-      presentation: product.presentation,
-      categoryId: product.category_id,
-      categoryName: product.category_name,
-      brand: product.brand,
-      vegano: product.vegano,
-      kosher: product.kosher,
-      testeadoEnAnimales: product.testeado_en_animales ?? undefined,
-      publicPrice: product.public_price,
-      memberPrice: product.member_price,
-      image: product.image ?? undefined,
-      status: product.status,
-      featured: product.featured,
-      trending: product.trending ?? undefined,
-      stock: product.stock ?? undefined,
-      description: product.description ?? undefined,
-      sourceSection: product.source_section ?? undefined,
-      createdAt: product.created_at ?? undefined,
-      updatedAt: product.updated_at ?? undefined,
-    })),
+    products: mappedProducts,
+    packs: mappedPacks,
     brands: brands.map((brand) => ({
       id: brand.id,
       code: brand.code,

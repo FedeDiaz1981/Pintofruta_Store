@@ -9,12 +9,13 @@ export type AdminTableKey =
   | "header_group_items"
   | "hero_slides"
   | "banners"
+  | "packs"
   | "categories"
   | "brands"
   | "users"
   | "products";
 
-export type AdminFieldKind = "text" | "number" | "boolean" | "textarea";
+export type AdminFieldKind = "text" | "number" | "boolean" | "textarea" | "pack_products";
 
 export interface AdminFieldDefinition {
   key: string;
@@ -46,6 +47,7 @@ export interface AdminCrudViewModel {
 
 const tableOrder: AdminTableKey[] = [
   "products",
+  "packs",
   "brands",
   "categories",
   "users",
@@ -70,7 +72,23 @@ function textareaField(key: string, label: string, required = false, helper?: st
   return { key, label, kind: "textarea", required, helper };
 }
 
+function packProductsField(key: string, label: string, helper?: string): AdminFieldDefinition {
+  return { key, label, kind: "pack_products", helper };
+}
+
 export function getAdminTableDefinitions(content: SiteContentDocument): AdminTableDefinition[] {
+  const packRows = (content.packs ?? []).map((pack) => ({
+    ...pack,
+    items_count: pack.items.length,
+    items_json: JSON.stringify(
+      pack.items.map((item, index) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        order: index + 1,
+      })),
+    ),
+  }));
+
   return [
     {
       key: "products",
@@ -218,6 +236,36 @@ export function getAdminTableDefinitions(content: SiteContentDocument): AdminTab
         textareaField("text", "Texto", true),
         numberField("order", "Orden", true),
         booleanField("active", "Activo"),
+      ],
+    },
+    {
+      key: "packs",
+      label: "Promociones",
+      description: "Paquetes de productos con precio propio.",
+      idField: "id",
+      rowLabelField: "title",
+      rows: packRows,
+      columns: [
+        { key: "id", label: "ID" },
+        { key: "apodo", label: "Apodo" },
+        { key: "title", label: "Título" },
+        { key: "category", label: "Categoría" },
+        { key: "publicPrice", label: "Precio" },
+        { key: "items_count", label: "Productos" },
+        { key: "active", label: "Activo" },
+      ],
+      fields: [
+        numberField("id", "ID", true, "Se usa al editar. En alta se calcula solo."),
+        textField("apodo", "Apodo", true, "Identificador amigable para el equipo."),
+        textField("title", "Título", true),
+        textareaField("description", "Descripción", true),
+        textField("category", "Categoría", true),
+        numberField("publicPrice", "Precio final", true),
+        textField("image", "Imagen"),
+        booleanField("active", "Activo"),
+        booleanField("featured", "Destacado"),
+        numberField("order", "Orden"),
+        packProductsField("items_json", "Productos del pack", "Buscá y seleccioná los productos que integran la promoción."),
       ],
     },
     {

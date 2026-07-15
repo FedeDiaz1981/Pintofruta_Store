@@ -114,6 +114,28 @@ export type SeedProduct = {
   updated_at: string | null;
 };
 
+export type SeedPack = {
+  id: number;
+  apodo: string;
+  title: string;
+  description: string;
+  category: string;
+  public_price: number;
+  image: string | null;
+  active: boolean;
+  featured: boolean;
+  order_index: number;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type SeedPackItem = {
+  pack_id: number;
+  product_id: number;
+  quantity: number;
+  order_index: number;
+};
+
 export function toSeedNavigationRows() {
   const navigation = fallbackSiteContent.headerNavigation as HeaderNavigation | undefined;
 
@@ -164,6 +186,37 @@ export function toSeedNavigationRows() {
     searchScopes,
     sections,
     groups,
+    items,
+  };
+}
+
+export function toSeedPackRows() {
+  const packs = (fallbackSiteContent.packs ?? []).map((pack, index) => ({
+    id: pack.id,
+    apodo: pack.apodo,
+    title: pack.title,
+    description: pack.description,
+    category: pack.category,
+    public_price: pack.publicPrice,
+    image: pack.image ?? null,
+    active: pack.active,
+    featured: pack.featured ?? false,
+    order_index: pack.order ?? index + 1,
+    created_at: pack.createdAt ?? null,
+    updated_at: pack.updatedAt ?? null,
+  })) satisfies SeedPack[];
+
+  const items = (fallbackSiteContent.packs ?? []).flatMap((pack) =>
+    pack.items.map((item, index) => ({
+      pack_id: pack.id,
+      product_id: item.productId,
+      quantity: item.quantity,
+      order_index: index + 1,
+    })),
+  ) satisfies SeedPackItem[];
+
+  return {
+    packs,
     items,
   };
 }

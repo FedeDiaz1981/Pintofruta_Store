@@ -13,6 +13,23 @@ import { formatCurrency } from "@/lib/catalog";
 
 type DraftRecord = Record<string, string | number | boolean | null>;
 
+type PackSelection = {
+  productId: number;
+  quantity: number;
+  order: number;
+};
+
+type CatalogProductRow = {
+  id: number;
+  sku: string;
+  name: string;
+  brand: string;
+  categoryName: string;
+  publicPrice: number;
+  image?: string;
+  stock?: number;
+};
+
 type EditorState = {
   tableKey: AdminTableKey;
   rowId: string;
@@ -20,12 +37,24 @@ type EditorState = {
 };
 
 const sidebarSections: { title: string; keys: AdminTableKey[] }[] = [
-  { title: "Listas", keys: ["products", "brands", "categories", "users"] },
+  { title: "Listas", keys: ["products", "packs", "brands", "categories", "users"] },
   { title: "Contenido", keys: ["hero_slides", "banners"] },
   { title: "Registro", keys: ["site_content_meta"] },
 ];
 
 function toDraftValue(field: AdminFieldDefinition, value: unknown): string | number | boolean | null {
+  if (field.kind === "pack_products") {
+    if (typeof value === "string") {
+      return value;
+    }
+
+    if (Array.isArray(value)) {
+      return JSON.stringify(value);
+    }
+
+    return "[]";
+  }
+
   if (field.kind === "boolean") {
     return Boolean(value);
   }
@@ -45,7 +74,17 @@ function emptyDraftFor(table: AdminTableDefinition): DraftRecord {
   const draft: DraftRecord = {};
 
   for (const field of table.fields) {
-    draft[field.key] = field.kind === "boolean" ? false : "";
+    if (field.kind === "boolean") {
+      draft[field.key] = false;
+      continue;
+    }
+
+    if (field.kind === "pack_products") {
+      draft[field.key] = "[]";
+      continue;
+    }
+
+    draft[field.key] = "";
   }
 
   return draft;
@@ -67,6 +106,46 @@ function draftFromRow(table: AdminTableDefinition, row: Record<string, unknown> 
 
 function stringifyDraft(draft: DraftRecord) {
   return JSON.stringify(draft);
+}
+
+function parsePackSelections(value: unknown): PackSelection[] {
+  if (typeof value !== "string" || !value.trim()) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown[];
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .map((item, index) => {
+        if (!item || typeof item !== "object") {
+          return null;
+        }
+
+        const candidate = item as Record<string, unknown>;
+        const productId = Number(candidate.productId);
+        const quantity = Math.max(1, Number(candidate.quantity) || 1);
+        const order = Math.max(1, Number(candidate.order) || index + 1);
+
+        if (!productId) {
+          return null;
+        }
+
+        return { productId, quantity, order };
+      })
+      .filter((item): item is PackSelection => Boolean(item))
+      .sort((left, right) => left.order - right.order);
+  } catch {
+    return [];
+  }
+}
+
+function serializePackSelections(selections: PackSelection[]) {
+  return JSON.stringify(selections.map((item, index) => ({ ...item, order: index + 1 })));
 }
 
 function formatCellValue(field: AdminFieldDefinition | undefined, value: unknown) {
@@ -126,6 +205,8 @@ function getCreateLabel(table: AdminTableDefinition) {
       return "Nuevo carrusel";
     case "products":
       return "Nuevo producto";
+    case "packs":
+      return "Nueva promoción";
     case "brands":
       return "Nueva marca";
     case "categories":
@@ -180,12 +261,177 @@ function getRowId(table: AdminTableDefinition, row: Record<string, unknown>) {
   return String(row[table.idField] ?? "");
 }
 
+function PackProductsField({
+  value,
+  onChange,
+  products,
+  search,
+  onSearchChange,
+}: {
+  value: string | number | boolean | null;
+  onChange: (nextValue: string) => void;
+  products: CatalogProductRow[];
+  search: string;
+  onSearchChange: (value: string) => void;
+}) {
+  const selections = parsePackSelections(value);
+  const selectedIds = new Set(selections.map((item) => item.productId));
+  const normalizedSearch = search.trim().toLowerCase();
+
+  const filteredProducts = products.filter((product) => {
+    if (!normalizedSearch) {
+      return true;
+    }
+
+    return [product.name, product.sku, product.brand, product.categoryName]
+      .filter(Boolean)
+      .some((entry) => String(entry).toLowerCase().includes(normalizedSearch));
+  });
+
+  const updateSelections = (nextSelections: PackSelection[]) => {
+    onChange(serializePackSelections(nextSelections));
+  };
+
+  const toggleProduct = (product: CatalogProductRow) => {
+    const productId = Number(product.id);
+    const current = selections.find((item) => item.productId === productId);
+
+    if (current) {
+      updateSelections(selections.filter((item) => item.productId !== productId));
+      return;
+    }
+
+    updateSelections([
+      ...selections,
+      {
+        productId,
+        quantity: 1,
+        order: selections.length + 1,
+      },
+    ]);
+  };
+
+  const setQuantity = (productId: number, quantity: number) => {
+    updateSelections(
+      selections.map((item) =>
+        item.productId === productId ? { ...item, quantity: Math.max(1, quantity) } : item,
+      ),
+    );
+  };
+
+  return (
+    <div className="space-y-4 rounded-[22px] border border-[var(--pf-border-soft)] bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <label className="flex h-12 flex-1 items-center rounded-full border border-[var(--pf-border-soft)] bg-slate-50 px-4 text-slate-500">
+          <span className="text-sm">Buscar</span>
+          <input
+            type="text"
+            value={search}
+            onChange={(event) => onSearchChange(event.target.value)}
+            className="ml-3 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
+            placeholder="SKU, nombre, marca o categoría"
+          />
+        </label>
+
+        <button
+          type="button"
+          onClick={() => updateSelections([])}
+          className="rounded-full border border-[var(--pf-border-soft)] bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+        >
+          Limpiar selección
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {selections.length > 0 ? (
+          selections.map((selection) => {
+            const product = products.find((item) => Number(item.id) === selection.productId);
+
+            if (!product) {
+              return null;
+            }
+
+            return (
+              <span
+                key={selection.productId}
+                className="inline-flex items-center gap-2 rounded-full border border-[rgba(168,109,69,0.16)] bg-[rgba(168,109,69,0.08)] px-3 py-1 text-xs font-semibold text-[var(--pf-primary-darker)]"
+              >
+                {String(product.name)}
+                <button
+                  type="button"
+                  className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-black"
+                  onClick={() => updateSelections(selections.filter((item) => item.productId !== selection.productId))}
+                >
+                  Quitar
+                </button>
+              </span>
+            );
+          })
+        ) : (
+          <span className="text-sm text-slate-500">Todavía no seleccionaste productos para este pack.</span>
+        )}
+      </div>
+
+      <div className="max-h-[320px] overflow-auto rounded-[20px] border border-slate-200">
+        <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,0.7fr)_auto] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">
+          <span>Producto</span>
+          <span>Cantidad</span>
+          <span>Acción</span>
+        </div>
+
+        <div className="divide-y divide-slate-100">
+          {filteredProducts.map((product) => {
+            const productId = Number(product.id);
+            const selected = selectedIds.has(productId);
+            const selection = selections.find((item) => item.productId === productId);
+
+            return (
+              <div key={productId} className={`grid grid-cols-[minmax(0,1.5fr)_minmax(0,0.7fr)_auto] items-center gap-3 px-4 py-3 ${selected ? "bg-[#fff8ec]" : ""}`}>
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-slate-900">{product.name}</p>
+                  <p className="text-sm text-slate-500">
+                    {product.sku} · {product.brand}
+                  </p>
+                </div>
+
+                <div>
+                  <input
+                    type="number"
+                    min={1}
+                    value={selection?.quantity ?? 1}
+                    onChange={(event) => setQuantity(productId, Number(event.target.value))}
+                    disabled={!selected}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none disabled:bg-slate-50"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => toggleProduct(product)}
+                  className={`rounded-full px-4 py-2 text-xs font-bold transition ${
+                    selected
+                      ? "border border-[rgba(168,109,69,0.18)] bg-[rgba(168,109,69,0.12)] text-[var(--pf-primary-darker)]"
+                      : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {selected ? "Quitar" : "Agregar"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   const { overview, tables } = model;
   const initialTableKey = (tables.find((table) => table.key === "hero_slides")?.key ?? tables[0]?.key ?? "") as AdminTableKey;
 
   const [selectedTableKey, setSelectedTableKey] = useState<AdminTableKey>(initialTableKey);
   const [query, setQuery] = useState("");
+  const [packSearch, setPackSearch] = useState("");
   const [selectedRowId, setSelectedRowId] = useState("");
   const [editor, setEditor] = useState<EditorState | null>(null);
 
@@ -195,6 +441,10 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   );
 
   const selectedRows = useMemo(() => (selectedTable?.rows as Record<string, unknown>[]) ?? [], [selectedTable]);
+  const productRows = useMemo(
+    () => (tables.find((table) => table.key === "products")?.rows as CatalogProductRow[]) ?? [],
+    [tables],
+  );
   const fieldMap = useMemo(() => new Map(selectedTable?.fields.map((field) => [field.key, field]) ?? []), [selectedTable]);
 
   const visibleRows = useMemo(() => {
@@ -222,6 +472,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
     setSelectedTableKey(table.key);
     setSelectedRowId("");
     setQuery("");
+    setPackSearch("");
     setEditor({
       tableKey: table.key,
       rowId: "",
@@ -234,6 +485,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
 
     setSelectedTableKey(table.key);
     setSelectedRowId(rowId);
+    setPackSearch("");
     setEditor({
       tableKey: table.key,
       rowId,
@@ -293,6 +545,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                             setSelectedTableKey(table.key);
                             setSelectedRowId("");
                             setQuery("");
+                            setPackSearch("");
                             setEditor(null);
                           }}
                           className={`flex w-full items-center justify-between rounded-[18px] px-4 py-4 text-left transition ${
@@ -326,10 +579,14 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                 </h1>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 xl:w-[620px] xl:grid-cols-5">
+              <div className="grid gap-3 sm:grid-cols-2 xl:w-[740px] xl:grid-cols-6">
                 <div className="flex min-h-[94px] flex-col justify-between rounded-[22px] border border-[var(--pf-border-soft)] bg-white p-4 shadow-[0_10px_25px_rgba(58,44,25,0.06)]">
                   <p className="text-[10px] font-black uppercase leading-none tracking-[0.26em] text-slate-400">Productos</p>
                   <p className="text-2xl font-black leading-none text-slate-900">{overview.counts.products}</p>
+                </div>
+                <div className="flex min-h-[94px] flex-col justify-between rounded-[22px] border border-[var(--pf-border-soft)] bg-white p-4 shadow-[0_10px_25px_rgba(58,44,25,0.06)]">
+                  <p className="text-[10px] font-black uppercase leading-none tracking-[0.26em] text-slate-400">Promociones</p>
+                  <p className="text-2xl font-black leading-none text-slate-900">{overview.counts.packs}</p>
                 </div>
                 <div className="flex min-h-[94px] flex-col justify-between rounded-[22px] border border-[var(--pf-border-soft)] bg-white p-4 shadow-[0_10px_25px_rgba(58,44,25,0.06)]">
                   <p className="text-[10px] font-black uppercase leading-none tracking-[0.26em] text-slate-400">Categorías</p>
@@ -529,7 +786,36 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
               <div className="grid gap-4 md:grid-cols-2">
                 {selectedTable.fields.map((field) => {
                   const value = editor.draft[field.key];
-                  const fullWidth = field.kind === "textarea" || field.kind === "boolean";
+                  const fullWidth = field.kind === "textarea" || field.kind === "boolean" || field.kind === "pack_products";
+
+                  if (field.kind === "pack_products") {
+                    return (
+                      <div key={field.key} className={`block ${fullWidth ? "md:col-span-2" : ""}`}>
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <span className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">
+                            {field.label}
+                          </span>
+                          {field.helper ? <span className="text-xs text-slate-500">{field.helper}</span> : null}
+                        </div>
+                        <PackProductsField
+                          value={value}
+                          onChange={(nextValue) =>
+                            setEditor((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    draft: { ...current.draft, [field.key]: nextValue },
+                                  }
+                                : current,
+                            )
+                          }
+                          products={productRows}
+                          search={packSearch}
+                          onSearchChange={setPackSearch}
+                        />
+                      </div>
+                    );
+                  }
 
                   if (field.kind === "boolean") {
                     return (

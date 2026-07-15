@@ -8,6 +8,8 @@ import {
   type BannerRow,
   type BrandRow,
   type CategoryRow,
+  type PackItemRow,
+  type PackRow,
   type HeroSlideRow,
   type NavGroupRow,
   type NavItemRow,
@@ -17,7 +19,7 @@ import {
   type SiteMetaRow,
   type UserRow,
 } from "@/infrastructure/site-content/mappers";
-import { fallbackSiteContent, seedLockKey, toSeedNavigationRows } from "@/infrastructure/site-content/seed";
+import { fallbackSiteContent, seedLockKey, toSeedNavigationRows, toSeedPackRows } from "@/infrastructure/site-content/seed";
 import { siteContentSchemaSql } from "@/infrastructure/site-content/schema";
 
 const ensureSchema = cache(async () => {
@@ -41,8 +43,45 @@ async function seedIfNeeded(client: PoolClient) {
 
     const metaCount = await countRows(client, "site_content_meta");
     const productCount = await countRows(client, "products");
+    const packCount = await countRows(client, "promotion_packs");
 
-    if (metaCount > 0 && productCount > 0) {
+    if (metaCount > 0 && productCount > 0 && packCount > 0) {
+      await client.query("commit");
+      return;
+    }
+
+    if (metaCount > 0 && productCount > 0 && packCount === 0) {
+      const seededPacks = toSeedPackRows();
+
+      for (const pack of seededPacks.packs) {
+        await client.query(
+          `
+            insert into promotion_packs (
+              id, apodo, title, description, category, public_price, image, active, featured, order_index
+            ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          `,
+          [
+            pack.id,
+            pack.apodo,
+            pack.title,
+            pack.description,
+            pack.category,
+            pack.public_price,
+            pack.image,
+            pack.active,
+            pack.featured,
+            pack.order_index,
+          ],
+        );
+      }
+
+      for (const item of seededPacks.items) {
+        await client.query(
+          "insert into promotion_pack_items (pack_id, product_id, quantity, order_index) values ($1, $2, $3, $4)",
+          [item.pack_id, item.product_id, item.quantity, item.order_index],
+        );
+      }
+
       await client.query("commit");
       return;
     }
@@ -54,6 +93,8 @@ async function seedIfNeeded(client: PoolClient) {
     await client.query("delete from hero_slides");
     await client.query("delete from banners");
     await client.query("delete from products");
+    await client.query("delete from promotion_pack_items");
+    await client.query("delete from promotion_packs");
     await client.query("delete from brands");
     await client.query("delete from users");
     await client.query("delete from categories");
@@ -196,6 +237,37 @@ async function seedIfNeeded(client: PoolClient) {
       );
     }
 
+    const seededPacks = toSeedPackRows();
+
+    for (const pack of seededPacks.packs) {
+      await client.query(
+        `
+          insert into promotion_packs (
+            id, apodo, title, description, category, public_price, image, active, featured, order_index
+          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        `,
+        [
+          pack.id,
+          pack.apodo,
+          pack.title,
+          pack.description,
+          pack.category,
+          pack.public_price,
+          pack.image,
+          pack.active,
+          pack.featured,
+          pack.order_index,
+        ],
+      );
+    }
+
+    for (const item of seededPacks.items) {
+      await client.query(
+        "insert into promotion_pack_items (pack_id, product_id, quantity, order_index) values ($1, $2, $3, $4)",
+        [item.pack_id, item.product_id, item.quantity, item.order_index],
+      );
+    }
+
     await client.query("commit");
   } catch (error) {
     await client.query("rollback");
@@ -252,6 +324,14 @@ export async function getSiteContent(): Promise<SiteContentDocument> {
       client,
       "select id, sku, name, detail, presentation, category_id, category_name, brand, vegano, kosher, testeado_en_animales, public_price, member_price, image, status, featured, trending, stock, description, source_section, created_at, updated_at from products order by id",
     );
+    const packRows = await readRows<PackRow>(
+      client,
+      "select id, apodo, title, description, category, public_price, image, active, featured, order_index, created_at, updated_at from promotion_packs order by order_index, id",
+    );
+    const packItemRows = await readRows<PackItemRow>(
+      client,
+      "select pack_id, product_id, quantity, order_index from promotion_pack_items order by order_index, pack_id, product_id",
+    );
     const brandRows = await readRows<BrandRow>(
       client,
       "select id, code, name, image, featured from brands order by featured desc, name",
@@ -273,6 +353,8 @@ export async function getSiteContent(): Promise<SiteContentDocument> {
       heroSlides: heroSlidesRows,
       banners: bannerRows,
       products: productRows,
+      packs: packRows,
+      packItems: packItemRows,
       brands: brandRows,
       categories: categoryRows,
       users: userRows,

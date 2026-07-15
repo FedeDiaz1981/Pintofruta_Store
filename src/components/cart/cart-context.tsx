@@ -1,9 +1,10 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { ProductItem } from "@/domain/site-content";
+import type { PackItem, ProductItem } from "@/domain/site-content";
 
 export type CartLine = {
+  kind: "product" | "pack";
   id: number;
   sku: string;
   name: string;
@@ -22,6 +23,7 @@ type CartContextValue = {
   closeCart: () => void;
   toggleCart: () => void;
   addItem: (product: ProductItem, quantity?: number) => void;
+  addPack: (pack: PackItem, quantity?: number) => void;
   updateQuantity: (sku: string, quantity: number) => void;
   removeItem: (sku: string) => void;
   clearCart: () => void;
@@ -45,7 +47,8 @@ function safeParseCart(value: string | null): CartLine[] {
     }
 
     return parsed
-      .map((item) => ({
+      .map((item): CartLine => ({
+        kind: item.kind === "pack" ? "pack" : "product",
         id: Number(item.id),
         sku: String(item.sku),
         name: String(item.name),
@@ -108,6 +111,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           return [
             ...current,
             {
+              kind: "product",
               id: product.id,
               sku: product.sku,
               name: product.name,
@@ -115,6 +119,32 @@ export function CartProvider({ children }: { children: ReactNode }) {
               presentation: product.presentation,
               image: product.image,
               publicPrice: product.publicPrice,
+              quantity: nextQuantity,
+            },
+          ];
+        });
+      },
+      addPack: (pack, quantity = 1) => {
+        setItems((current) => {
+          const nextQuantity = Math.max(1, quantity);
+          const sku = `PACK-${pack.id}`;
+          const existing = current.find((item) => item.sku === sku);
+
+          if (existing) {
+            return current.map((item) => (item.sku === sku ? { ...item, quantity: item.quantity + nextQuantity } : item));
+          }
+
+          return [
+            ...current,
+            {
+              kind: "pack",
+              id: pack.id,
+              sku,
+              name: pack.title,
+              brand: pack.category || "Promoción",
+              presentation: `${pack.items.length} productos incluidos`,
+              image: pack.image,
+              publicPrice: pack.publicPrice,
               quantity: nextQuantity,
             },
           ];

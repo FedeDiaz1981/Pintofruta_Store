@@ -1,5 +1,12 @@
 import { getSiteContent } from "@/infrastructure/site-content.repository";
-import type { BrandItem, CatalogFilters, CategoryItem, HomePageViewModel, ProductItem } from "@/domain/site-content";
+import type {
+  BrandItem,
+  CatalogFilters,
+  CategoryItem,
+  HomePageViewModel,
+  PackItem,
+  ProductItem,
+} from "@/domain/site-content";
 import { normalizeText } from "@/lib/catalog";
 
 export interface DynamicMenuItem {
@@ -38,6 +45,12 @@ export interface GalleryPageViewModel {
   activeCategory: string;
   query: string;
   totalProducts: number;
+}
+
+export interface PacksGalleryPageViewModel {
+  packs: PackItem[];
+  query: string;
+  totalPacks: number;
 }
 
 function getAlphabetPair(initial: string) {
@@ -125,6 +138,32 @@ function filterCatalogProducts(products: ProductItem[], filters: CatalogFilters 
     const matchesCategory = !category || normalizeText(item.categoryName).includes(category);
 
     return matchesQuery && matchesBrand && matchesCategory;
+  });
+}
+
+function filterCatalogPacks(packs: PackItem[], query = "") {
+  const normalizedQuery = normalizeText(query);
+
+  return packs.filter((item) => {
+    if (!item.active) {
+      return false;
+    }
+
+    if (!normalizedQuery) {
+      return true;
+    }
+
+    return (
+      normalizeText(item.title).includes(normalizedQuery) ||
+      normalizeText(item.description).includes(normalizedQuery) ||
+      normalizeText(item.category).includes(normalizedQuery) ||
+      normalizeText(item.apodo).includes(normalizedQuery) ||
+      item.items.some((selected) =>
+        normalizeText(selected.product.name).includes(normalizedQuery) ||
+        normalizeText(selected.product.brand).includes(normalizedQuery) ||
+        normalizeText(selected.product.categoryName).includes(normalizedQuery),
+      )
+    );
   });
 }
 
@@ -244,5 +283,16 @@ export async function getGalleryPageViewModel(filters: CatalogFilters = {}): Pro
     activeCategory: filters.category ? normalizeText(filters.category) : "",
     query: filters.query ? filters.query.trim() : "",
     totalProducts: publishedProducts.length,
+  };
+}
+
+export async function getPacksGalleryPageViewModel(query = ""): Promise<PacksGalleryPageViewModel> {
+  const content = await getSiteContent();
+  const packs = filterCatalogPacks(content.packs ?? [], query);
+
+  return {
+    packs,
+    query: query.trim(),
+    totalPacks: packs.length,
   };
 }

@@ -45,6 +45,12 @@ function slugify(value: string) {
   return normalizeText(value).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+type PackItemDraft = {
+  productId: number;
+  quantity: number;
+  order: number;
+};
+
 function getJsonPayload(formData: FormData): PayloadRecord {
   const raw = formData.get("payload_json");
 
@@ -249,6 +255,121 @@ async function saveBanner(record: PayloadRecord) {
   );
 }
 
+function parsePackItems(value: unknown): PackItemDraft[] {
+  if (typeof value !== "string" || !value.trim()) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown[];
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .map((item, index) => {
+        if (!item || typeof item !== "object") {
+          return null;
+        }
+
+        const candidate = item as Record<string, unknown>;
+        const productId = toNumber(candidate.productId);
+        const quantity = Math.max(1, toNumber(candidate.quantity) || 1);
+        const order = Math.max(1, toNumber(candidate.order) || index + 1);
+
+        if (!productId) {
+          return null;
+        }
+
+        return { productId, quantity, order };
+      })
+      .filter((item): item is PackItemDraft => Boolean(item))
+      .sort((left, right) => left.order - right.order);
+  } catch {
+    return [];
+  }
+}
+
+async function savePack(record: PayloadRecord) {
+  const client = await postgresPool!.connect();
+
+  try {
+    await client.query("begin");
+
+    const id = record.id ? toNumber(record.id) : await nextNumericId("promotion_packs");
+    const title = toStringValue(record.title);
+    const apodo = toStringValue(record.apodo) || slugify(title);
+    const items = parsePackItems(record.items_json);
+
+    if (!title) {
+      throw new Error("El pack necesita un título.");
+    }
+
+    if (!apodo) {
+      throw new Error("El pack necesita un apodo.");
+    }
+
+    if (toNumber(record.publicPrice) <= 0) {
+      throw new Error("El pack necesita un precio final válido.");
+    }
+
+    if (items.length === 0) {
+      throw new Error("El pack debe incluir al menos un producto.");
+    }
+
+    await client.query(
+      `
+        insert into promotion_packs (
+          id, apodo, title, description, category, public_price, image, active, featured, order_index
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        on conflict (id) do update set
+          apodo = excluded.apodo,
+          title = excluded.title,
+          description = excluded.description,
+          category = excluded.category,
+          public_price = excluded.public_price,
+          image = excluded.image,
+          active = excluded.active,
+          featured = excluded.featured,
+          order_index = excluded.order_index,
+          updated_at = now()
+      `,
+      [
+        id,
+        apodo,
+        title,
+        toStringValue(record.description),
+        toStringValue(record.category),
+        toNumber(record.publicPrice),
+        toStringValue(record.image) || null,
+        toBoolean(record.active),
+        toBoolean(record.featured),
+        toNumber(record.order),
+      ],
+    );
+
+    await client.query("delete from promotion_pack_items where pack_id = $1", [id]);
+
+    for (const item of items) {
+      await client.query(
+        `
+          insert into promotion_pack_items (pack_id, product_id, quantity, order_index)
+          values ($1, $2, $3, $4)
+        `,
+        [id, item.productId, item.quantity, item.order],
+      );
+    }
+
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function saveSearchScope(record: PayloadRecord) {
   const id = await resolveTextId("header_search_scopes", toStringValue(record.id), [toStringValue(record.label), toStringValue(record.href)]);
   await postgresPool!.query(
@@ -361,6 +482,8 @@ async function saveRow(table: AdminTableKey, record: PayloadRecord) {
       return saveHeroSlide(record);
     case "banners":
       return saveBanner(record);
+    case "packs":
+      return savePack(record);
     case "header_search_scopes":
       return saveSearchScope(record);
     case "header_sections":
@@ -395,6 +518,9 @@ async function deleteRow(table: AdminTableKey, id: string) {
       return;
     case "banners":
       await postgresPool!.query("delete from banners where id = $1", [toNumber(id)]);
+      return;
+    case "packs":
+      await postgresPool!.query("delete from promotion_packs where id = $1", [toNumber(id)]);
       return;
     case "header_search_scopes":
       await postgresPool!.query("delete from header_search_scopes where id = $1", [toStringValue(id)]);

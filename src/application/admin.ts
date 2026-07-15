@@ -9,6 +9,7 @@ export interface AdminOverview {
     categories: number;
     users: number;
     heroSlides: number;
+    packs: number;
   };
   featuredProducts: ProductItem[];
   activeUsers: UserItem[];
@@ -27,6 +28,7 @@ export async function getAdminOverview(): Promise<AdminOverview> {
       categories: content.categories?.length ?? 0,
       users: content.users?.length ?? 0,
       heroSlides: content.heroSlides.length,
+      packs: content.packs?.length ?? 0,
     },
     featuredProducts: content.products.filter((product) => product.featured).slice(0, 8),
     activeUsers: (content.users ?? []).filter((user) => user.active).slice(0, 6),
@@ -45,6 +47,7 @@ export async function getAdminPanelViewModel(): Promise<AdminCrudViewModel> {
       categories: content.categories?.length ?? 0,
       users: content.users?.length ?? 0,
       heroSlides: content.heroSlides.length,
+      packs: content.packs?.length ?? 0,
     },
     featuredProducts: content.products.filter((product) => product.featured).slice(0, 8),
     activeUsers: (content.users ?? []).filter((user) => user.active).slice(0, 6),

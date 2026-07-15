@@ -73,6 +73,28 @@ export interface ProductItem {
   updatedAt?: string;
 }
 
+export interface PackIncludedProduct {
+  productId: number;
+  quantity: number;
+  product: ProductItem;
+}
+
+export interface PackItem {
+  id: number;
+  apodo: string;
+  title: string;
+  description: string;
+  category: string;
+  publicPrice: number;
+  image?: string;
+  active: boolean;
+  featured?: boolean;
+  order?: number;
+  items: PackIncludedProduct[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface CategoryItem {
   id: number;
   name: string;
@@ -107,6 +129,7 @@ export interface SiteContentDocument {
   heroSlides: HeroSlide[];
   banners: BannerItem[];
   products: ProductItem[];
+  packs?: PackItem[];
   brands: BrandItem[];
   categories?: CategoryItem[];
   users?: UserItem[];
@@ -117,6 +140,7 @@ export interface SiteContentDocument {
     user?: number;
     heroSlide?: number;
     banner?: number;
+    pack?: number;
   };
 }
 

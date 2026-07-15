@@ -1156,6 +1156,60 @@
       "image": "Content/Images/articulos/pf020.jpg"
     }
   ],
+  "packs": [
+    {
+      "id": 1,
+      "apodo": "desayuno-activo",
+      "title": "Desayuno Activo",
+      "description": "Una selección equilibrada para arrancar la mañana con opciones prácticas y saludables.",
+      "category": "Alimentos saludables",
+      "publicPrice": 6990,
+      "image": "Content/Images/articulos/pf002.jpg",
+      "active": true,
+      "featured": true,
+      "order": 1,
+      "items": [
+        {
+          "productId": 2,
+          "quantity": 1
+        },
+        {
+          "productId": 11,
+          "quantity": 1
+        },
+        {
+          "productId": 3,
+          "quantity": 1
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "apodo": "congelados-listos",
+      "title": "Congelados Listos",
+      "description": "Un combo pensado para resolver almuerzos rápidos sin perder variedad ni sabor.",
+      "category": "Congelados",
+      "publicPrice": 10990,
+      "image": "Content/Images/articulos/pf006.jpg",
+      "active": true,
+      "featured": false,
+      "order": 2,
+      "items": [
+        {
+          "productId": 6,
+          "quantity": 1
+        },
+        {
+          "productId": 8,
+          "quantity": 1
+        },
+        {
+          "productId": 10,
+          "quantity": 1
+        }
+      ]
+    }
+  ],
   "brands": [
     {
       "id": "AL-NATURAL",
@@ -1456,6 +1510,7 @@
   ],
   "nextIds": {
     "product": 21,
+    "pack": 3,
     "category": 21,
     "user": 5,
     "heroSlide": 6,
