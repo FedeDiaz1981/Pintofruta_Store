@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { Minus, Plus, X } from "lucide-react";
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useCart } from "@/components/cart/cart-context";
 import { formatCurrency, publicAsset } from "@/lib/catalog";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 
 export function CartPanel({
   mode = "drawer",
@@ -13,6 +13,46 @@ export function CartPanel({
   mode?: "drawer" | "page";
 }) {
   const { items, hydrated, isOpen, closeCart, updateQuantity, removeItem, clearCart, totalItems, totalPrice } = useCart();
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
+  const handleConfirmPedido = useCallback(async () => {
+    if (!hydrated || items.length === 0 || isGeneratingPdf) {
+      return;
+    }
+
+    try {
+      setIsGeneratingPdf(true);
+
+      const response = await fetch("/api/pedido/pdf", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          items,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("No se pudo generar el PDF del pedido.");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "pedido-pintofruta.pdf";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error(error);
+      window.alert("No pudimos generar el PDF del pedido. Probá de nuevo.");
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  }, [hydrated, items, isGeneratingPdf]);
 
   const visible = mode === "page" ? true : isOpen;
   const containerClass =
@@ -151,14 +191,20 @@ export function CartPanel({
             >
               Vaciar pedido
             </button>
-            <Link href="/galeria" className={buttonVariants({ variant: "secondary", size: "md" })}>
-              Confirmar pedido
-            </Link>
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={handleConfirmPedido}
+              disabled={items.length === 0 || isGeneratingPdf}
+            >
+              {isGeneratingPdf ? "Generando PDF..." : "Confirmar pedido"}
+            </Button>
           </div>
         </div>
       </aside>
     ),
-    [clearCart, closeCart, hydrated, items, mode, removeItem, totalItems, totalPrice, updateQuantity],
+    [clearCart, closeCart, hydrated, handleConfirmPedido, isGeneratingPdf, items, mode, removeItem, totalItems, totalPrice, updateQuantity],
   );
 
   if (!visible) {
