@@ -106,8 +106,11 @@ export type SeedProduct = {
   image: string | null;
   status: string;
   featured: boolean;
+  featured_priority: number | null;
   trending: boolean | null;
   stock: number | null;
+  views_count: number | null;
+  sales_count: number | null;
   description: string | null;
   source_section: string | null;
   created_at: string | null;

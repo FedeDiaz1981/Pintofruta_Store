@@ -103,8 +103,11 @@ export const siteContentSchemaSql = `
     image text,
     status text not null,
     featured boolean not null,
+    featured_priority integer,
     trending boolean,
     stock integer,
+    views_count integer not null default 0,
+    sales_count integer not null default 0,
     description text,
     source_section text,
     created_at timestamptz not null default now(),
@@ -113,6 +116,9 @@ export const siteContentSchemaSql = `
 
   alter table products add column if not exists created_at timestamptz not null default now();
   alter table products add column if not exists updated_at timestamptz not null default now();
+  alter table products add column if not exists featured_priority integer;
+  alter table products add column if not exists views_count integer not null default 0;
+  alter table products add column if not exists sales_count integer not null default 0;
 
   create table if not exists promotion_packs (
     id integer primary key,

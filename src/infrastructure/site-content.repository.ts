@@ -205,11 +205,12 @@ async function seedIfNeeded(client: PoolClient) {
           insert into products (
             id, sku, name, detail, presentation, category_id, category_name, brand,
             vegano, kosher, testeado_en_animales, public_price, member_price, image,
-            status, featured, trending, stock, description, source_section
+            status, featured, featured_priority, trending, stock, views_count, sales_count, description, source_section
           ) values (
             $1, $2, $3, $4, $5, $6, $7, $8,
             $9, $10, $11, $12, $13, $14,
-            $15, $16, $17, $18, $19, $20
+            $15, $16, $17, $18, $19, $20,
+            $21, $22
           )
         `,
         [
@@ -229,8 +230,11 @@ async function seedIfNeeded(client: PoolClient) {
           product.image ?? null,
           product.status,
           Boolean(product.featured),
+          product.featuredPriority ?? null,
           product.trending ?? null,
           product.stock ?? null,
+          product.viewsCount ?? 0,
+          product.salesCount ?? 0,
           product.description ?? null,
           product.sourceSection ?? null,
         ],
@@ -322,7 +326,7 @@ export async function getSiteContent(): Promise<SiteContentDocument> {
     );
     const productRows = await readRows<ProductRow>(
       client,
-      "select id, sku, name, detail, presentation, category_id, category_name, brand, vegano, kosher, testeado_en_animales, public_price, member_price, image, status, featured, trending, stock, description, source_section, created_at, updated_at from products order by id",
+      "select id, sku, name, detail, presentation, category_id, category_name, brand, vegano, kosher, testeado_en_animales, public_price, member_price, image, status, featured, featured_priority, trending, stock, views_count, sales_count, description, source_section, created_at, updated_at from products order by id",
     );
     const packRows = await readRows<PackRow>(
       client,

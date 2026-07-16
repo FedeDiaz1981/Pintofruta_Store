@@ -65,8 +65,11 @@ export interface ProductItem {
   image?: string;
   status: string;
   featured: boolean;
+  featuredPriority?: number;
   trending?: boolean;
   stock?: number;
+  viewsCount?: number;
+  salesCount?: number;
   description?: string;
   sourceSection?: string;
   createdAt?: string;

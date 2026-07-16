@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { recordProductView } from "@/app/catalog-actions";
 import { CartAddButton } from "@/components/cart/cart-add-button";
 import type { ProductItem } from "@/domain/site-content";
 import { formatCurrency, publicAsset } from "@/lib/catalog";
@@ -19,6 +20,7 @@ export function ProductDetailModal({
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const detailsDialogRef = useRef<HTMLDialogElement | null>(null);
   const addTimerRef = useRef<number | null>(null);
+  const trackedProductIdRef = useRef<number | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [isAdding, setIsAdding] = useState(false);
   const [showFullDetails, setShowFullDetails] = useState(false);
@@ -56,6 +58,19 @@ export function ProductDetailModal({
       dialog.removeEventListener("close", handleClose);
     };
   }, [onClose]);
+
+  useEffect(() => {
+    if (!product) {
+      return;
+    }
+
+    if (trackedProductIdRef.current === product.id) {
+      return;
+    }
+
+    trackedProductIdRef.current = product.id;
+    void recordProductView(product.id).catch(() => undefined);
+  }, [product]);
 
   useEffect(() => {
     const dialog = detailsDialogRef.current;
@@ -150,7 +165,7 @@ export function ProductDetailModal({
                 </div>
                 <form method="dialog">
                   <Button type="submit" variant="secondary" size="icon" aria-label="Cerrar">
-                    ×
+                    X
                   </Button>
                 </form>
               </div>
@@ -282,7 +297,7 @@ export function ProductDetailModal({
             </div>
             <form method="dialog">
               <Button type="submit" variant="secondary" size="icon" aria-label="Cerrar detalle completo">
-                Ã—
+                X
               </Button>
             </form>
           </div>

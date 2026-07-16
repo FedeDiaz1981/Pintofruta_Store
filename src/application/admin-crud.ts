@@ -64,8 +64,14 @@ function textField(key: string, label: string, required = false, helper?: string
   return { key, label, kind: "text", required, helper };
 }
 
-function numberField(key: string, label: string, required = false, helper?: string): AdminFieldDefinition {
-  return { key, label, kind: "number", required, helper };
+function numberField(
+  key: string,
+  label: string,
+  required = false,
+  helper?: string,
+  readonly = false,
+): AdminFieldDefinition {
+  return { key, label, kind: "number", required, helper, readonly };
 }
 
 function textareaField(key: string, label: string, required = false, helper?: string): AdminFieldDefinition {
@@ -103,7 +109,10 @@ export function getAdminTableDefinitions(content: SiteContentDocument): AdminTab
         { key: "name", label: "Nombre" },
         { key: "brand", label: "Marca" },
         { key: "publicPrice", label: "Precio" },
+        { key: "featuredPriority", label: "Prioridad" },
         { key: "featured", label: "Destacado" },
+        { key: "viewsCount", label: "Vistas" },
+        { key: "salesCount", label: "Ventas" },
       ],
       fields: [
         numberField("id", "ID", true, "Se usa al editar. En alta se calcula solo."),
@@ -122,8 +131,11 @@ export function getAdminTableDefinitions(content: SiteContentDocument): AdminTab
         textField("image", "Imagen"),
         textField("status", "Estado", true),
         booleanField("featured", "Destacado"),
+        numberField("featuredPriority", "Prioridad destacada", false, "Más bajo = antes en el carrusel."),
         booleanField("trending", "Tendencia"),
         numberField("stock", "Stock"),
+        numberField("viewsCount", "Vistas", false, "Se actualiza cuando se abre el detalle.", true),
+        numberField("salesCount", "Ventas", false, "Reservado para ventas confirmadas.", true),
         textareaField("description", "Descripcion"),
         textField("sourceSection", "Seccion origen"),
       ],

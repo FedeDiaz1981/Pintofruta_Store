@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { recordProductView } from "@/app/catalog-actions";
 import { getProductBySku } from "@/application/catalog";
 import { CartAddButton } from "@/components/cart/cart-add-button";
 import { formatCurrency, publicAsset } from "@/lib/catalog";
@@ -17,6 +18,8 @@ export default async function ProductPage({
   if (!product) {
     notFound();
   }
+
+  await recordProductView(product.id).catch(() => undefined);
 
   return (
     <main className="pf-shell flex w-full flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:px-12 lg:py-10">

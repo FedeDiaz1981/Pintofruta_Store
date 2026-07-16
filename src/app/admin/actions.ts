@@ -100,9 +100,9 @@ async function saveProduct(record: PayloadRecord) {
       insert into products (
         id, sku, name, detail, presentation, category_id, category_name, brand,
         vegano, kosher, testeado_en_animales, public_price, member_price, image,
-        status, featured, trending, stock, description, source_section
+        status, featured, featured_priority, trending, stock, views_count, sales_count, description, source_section
       ) values (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22
       )
       on conflict (id) do update set
         sku = excluded.sku,
@@ -120,8 +120,11 @@ async function saveProduct(record: PayloadRecord) {
         image = excluded.image,
         status = excluded.status,
         featured = excluded.featured,
+        featured_priority = excluded.featured_priority,
         trending = excluded.trending,
         stock = excluded.stock,
+        views_count = excluded.views_count,
+        sales_count = excluded.sales_count,
         description = excluded.description,
         source_section = excluded.source_section,
         updated_at = now()
@@ -143,8 +146,11 @@ async function saveProduct(record: PayloadRecord) {
       toStringValue(record.image) || null,
       toStringValue(record.status) || "published",
       toBoolean(record.featured),
+      record.featuredPriority == null || record.featuredPriority === "" ? null : toNumber(record.featuredPriority),
       record.trending == null || record.trending === "" ? null : toBoolean(record.trending),
       record.stock == null || record.stock === "" ? null : toNumber(record.stock),
+      record.viewsCount == null || record.viewsCount === "" ? 0 : toNumber(record.viewsCount),
+      record.salesCount == null || record.salesCount === "" ? 0 : toNumber(record.salesCount),
       toStringValue(record.description) || null,
       toStringValue(record.sourceSection) || null,
     ],

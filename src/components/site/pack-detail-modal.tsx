@@ -214,7 +214,11 @@ export function PackDetailModal({
         </form>
       </dialog>
 
-      <ProductDetailModal product={selectedProduct} onClose={() => setSelectedProduct(null)} />
+      <ProductDetailModal
+        key={selectedProduct?.id ?? "empty"}
+        product={selectedProduct}
+        onClose={() => setSelectedProduct(null)}
+      />
     </>
   );
 }

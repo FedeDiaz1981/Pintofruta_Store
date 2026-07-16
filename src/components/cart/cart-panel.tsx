@@ -152,7 +152,7 @@ export function CartPanel({
               Vaciar pedido
             </button>
             <Link href="/galeria" className={buttonVariants({ variant: "secondary", size: "md" })}>
-              Seguir comprando
+              Confirmar pedido
             </Link>
           </div>
         </div>

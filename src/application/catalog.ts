@@ -190,6 +190,91 @@ function buildFacetOptions(
     }));
 }
 
+function getPopularityScore(product: ProductItem) {
+  const views = product.viewsCount ?? 0;
+  const sales = product.salesCount ?? 0;
+
+  return sales * 1000 + views;
+}
+
+function getFeaturedBoost(product: ProductItem) {
+  return product.featured ? 250 : 0;
+}
+
+function getHybridFeaturedScore(product: ProductItem) {
+  return getPopularityScore(product) + getFeaturedBoost(product);
+}
+
+function buildFeaturedProducts(products: ProductItem[], limit = 12) {
+  const publishedProducts = products.filter((item) => item.status === "published");
+  const priorityFeatured = publishedProducts
+    .filter((item) => item.featured && (item.featuredPriority ?? 0) > 0)
+    .sort((left, right) => {
+      const leftPriority = left.featuredPriority ?? 0;
+      const rightPriority = right.featuredPriority ?? 0;
+
+      return (
+        leftPriority - rightPriority ||
+        getHybridFeaturedScore(right) - getHybridFeaturedScore(left) ||
+        left.name.localeCompare(right.name, "es", { sensitivity: "base" })
+      );
+    });
+
+  const priorityIds = new Set(priorityFeatured.map((item) => item.id));
+  const rankedPool = publishedProducts
+    .filter((item) => !priorityIds.has(item.id))
+    .sort((left, right) => {
+      const scoreDelta = getHybridFeaturedScore(right) - getHybridFeaturedScore(left);
+      if (scoreDelta !== 0) {
+        return scoreDelta;
+      }
+
+      return left.name.localeCompare(right.name, "es", { sensitivity: "base" });
+    });
+
+  const insertions = new Map<number, ProductItem[]>();
+
+  for (const item of priorityFeatured) {
+    const position = Math.max(1, item.featuredPriority ?? 1);
+    const bucket = insertions.get(position) ?? [];
+    bucket.push(item);
+    insertions.set(position, bucket);
+  }
+
+  const result: ProductItem[] = [];
+  let rankedIndex = 0;
+  const maxPosition = Math.max(limit, ...priorityFeatured.map((item) => item.featuredPriority ?? 0), rankedPool.length + priorityFeatured.length);
+
+  for (let position = 1; position <= maxPosition && result.length < limit; position += 1) {
+    const prioritized = insertions.get(position) ?? [];
+
+    for (const item of prioritized) {
+      if (result.length >= limit) {
+        break;
+      }
+
+      result.push(item);
+    }
+
+    if (result.length >= limit) {
+      break;
+    }
+
+    const nextRanked = rankedPool[rankedIndex];
+    if (nextRanked) {
+      result.push(nextRanked);
+      rankedIndex += 1;
+    }
+  }
+
+  while (result.length < limit && rankedIndex < rankedPool.length) {
+    result.push(rankedPool[rankedIndex]);
+    rankedIndex += 1;
+  }
+
+  return result;
+}
+
 export async function getDynamicHeaderMenus(): Promise<DynamicHeaderMenu[]> {
   const content = await getSiteContent();
 
@@ -216,9 +301,7 @@ export async function getHomePageViewModel(): Promise<HomePageViewModel> {
     .filter((item) => item.active)
     .sort((a, b) => a.order - b.order);
   const spotlightSlide = heroSlides.find((item) => item.homeSpotlight) ?? heroSlides[0] ?? null;
-  const featuredProducts = content.products
-    .filter((item) => item.status === "published" && item.featured)
-    .slice(0, 8);
+  const featuredProducts = buildFeaturedProducts(content.products, 12);
   const trendingProducts = content.products
     .filter((item) => item.status === "published" && item.trending)
     .slice(0, 8);
