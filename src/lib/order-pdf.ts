@@ -65,14 +65,14 @@ export function buildOrderPdfHtml(data: OrderPdfData) {
   const rows = items
     .map((item) => {
       const subtotal = item.quantity * item.publicPrice;
-      const typeLabel = item.kind === "pack" ? "Promoción" : "Producto";
+      const typeLabel = item.kind === "pack" ? "Promocion" : "Producto";
 
       return `
         <tr>
-          <td class="item-cell">
-            <div class="item-name">${escapeHtml(item.name)}</div>
-            <div class="item-meta">${escapeHtml(item.brand)} · ${escapeHtml(item.presentation)}</div>
-            <div class="item-chip">${escapeHtml(typeLabel)}</div>
+          <td>
+            <div class="product-name">${escapeHtml(item.name)}</div>
+            <div class="product-meta">${escapeHtml(item.brand)} · ${escapeHtml(item.presentation)}</div>
+            <div class="product-type">${escapeHtml(typeLabel)}</div>
           </td>
           <td class="mono">${escapeHtml(item.sku)}</td>
           <td class="center">${item.quantity}</td>
@@ -91,15 +91,11 @@ export function buildOrderPdfHtml(data: OrderPdfData) {
       <title>Pedido Pintofruta</title>
       <style>
         :root {
-          --pf-bg: #f7f2e8;
-          --pf-surface: #fffdf8;
-          --pf-border: rgba(168, 109, 69, 0.22);
-          --pf-border-strong: rgba(168, 109, 69, 0.42);
-          --pf-text: #2f2a25;
-          --pf-muted: #6e665f;
-          --pf-primary: #a86d45;
-          --pf-primary-dark: #7b4c2d;
-          --pf-soft: #efe1cb;
+          --text: #1f2328;
+          --muted: #5f6b7a;
+          --line: #d8dee6;
+          --line-strong: #b9c3cf;
+          --soft: #f7f9fc;
         }
 
         @page {
@@ -115,129 +111,111 @@ export function buildOrderPdfHtml(data: OrderPdfData) {
         body {
           margin: 0;
           padding: 0;
-          background: var(--pf-bg);
-          color: var(--pf-text);
+          background: #fff;
+          color: var(--text);
           font-family: Arial, Helvetica, sans-serif;
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
         }
 
-        body {
+        .page {
           padding: 0;
         }
 
-        .sheet {
-          background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(250, 245, 236, 0.98));
-          border: 1px solid var(--pf-border);
-          border-radius: 28px;
-          padding: 28px;
-          box-shadow: 0 16px 50px rgba(74, 57, 38, 0.12);
-        }
-
-        .header {
+        .topbar {
           display: flex;
           justify-content: space-between;
           gap: 24px;
           align-items: flex-start;
-          padding-bottom: 20px;
-          border-bottom: 1px solid rgba(168, 109, 69, 0.18);
-          margin-bottom: 20px;
+          padding-bottom: 18px;
+          margin-bottom: 18px;
+          border-bottom: 2px solid var(--line-strong);
         }
 
         .brand {
-          display: inline-flex;
+          display: flex;
           align-items: center;
           gap: 14px;
         }
 
         .brand-mark {
-          width: 54px;
-          height: 54px;
-          border-radius: 18px;
-          background: linear-gradient(180deg, var(--pf-primary), var(--pf-primary-dark));
+          width: 46px;
+          height: 46px;
+          border-radius: 12px;
+          background: #1f2328;
+          color: #fff;
           display: grid;
           place-items: center;
-          color: white;
-          font-weight: 800;
-          font-size: 18px;
+          font-size: 16px;
+          font-weight: 700;
           letter-spacing: 0.08em;
         }
 
-        .brand-name {
-          font-size: 24px;
-          font-weight: 900;
-          line-height: 1;
+        .brand-title {
+          font-size: 22px;
+          font-weight: 800;
+          line-height: 1.1;
         }
 
         .brand-subtitle {
-          margin-top: 6px;
-          color: var(--pf-muted);
-          font-size: 12px;
-          letter-spacing: 0.18em;
+          margin-top: 4px;
+          color: var(--muted);
+          font-size: 11px;
           text-transform: uppercase;
+          letter-spacing: 0.18em;
         }
 
-        .meta-grid {
-          display: grid;
-          gap: 10px;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+        .doc-meta {
           min-width: 250px;
+          text-align: right;
         }
 
-        .meta-card {
-          border: 1px solid var(--pf-border);
-          border-radius: 18px;
-          background: rgba(255, 255, 255, 0.88);
-          padding: 12px 14px;
-        }
-
-        .meta-label {
+        .doc-label {
+          color: var(--muted);
           font-size: 10px;
           text-transform: uppercase;
-          letter-spacing: 0.22em;
-          color: var(--pf-muted);
+          letter-spacing: 0.2em;
           margin-bottom: 6px;
           font-weight: 700;
         }
 
-        .meta-value {
-          font-size: 14px;
+        .doc-value {
+          font-size: 13px;
           font-weight: 700;
         }
 
-        .highlight {
+        .summary {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 12px;
-          margin-bottom: 18px;
+          margin-bottom: 16px;
         }
 
-        .highlight-card {
-          border: 1px solid var(--pf-border);
-          border-radius: 20px;
-          background: rgba(255, 255, 255, 0.84);
-          padding: 14px 16px;
+        .summary-card {
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          background: var(--soft);
+          padding: 12px 14px;
         }
 
-        .highlight-label {
+        .summary-card .label {
+          color: var(--muted);
           font-size: 10px;
           text-transform: uppercase;
-          letter-spacing: 0.24em;
-          color: var(--pf-muted);
+          letter-spacing: 0.18em;
+          margin-bottom: 8px;
           font-weight: 700;
         }
 
-        .highlight-value {
-          margin-top: 8px;
-          font-size: 24px;
-          font-weight: 900;
+        .summary-card .value {
+          font-size: 18px;
+          font-weight: 800;
         }
 
         .table-wrap {
-          border: 1px solid rgba(168, 109, 69, 0.18);
-          border-radius: 22px;
+          border: 1px solid var(--line);
+          border-radius: 12px;
           overflow: hidden;
-          background: var(--pf-surface);
           margin-bottom: 18px;
         }
 
@@ -248,60 +226,56 @@ export function buildOrderPdfHtml(data: OrderPdfData) {
         }
 
         thead th {
-          background: linear-gradient(180deg, rgba(239, 225, 203, 0.88), rgba(245, 236, 221, 0.92));
-          color: var(--pf-primary-dark);
+          background: #eef3f8;
+          border-bottom: 1px solid var(--line-strong);
+          color: #334155;
           font-size: 10px;
           text-transform: uppercase;
-          letter-spacing: 0.22em;
-          padding: 14px 12px;
+          letter-spacing: 0.18em;
+          padding: 12px 10px;
           text-align: left;
         }
 
         tbody td {
-          padding: 16px 12px;
-          border-top: 1px solid rgba(168, 109, 69, 0.12);
+          border-top: 1px solid var(--line);
+          padding: 12px 10px;
           vertical-align: top;
           font-size: 12px;
         }
 
         tbody tr:nth-child(even) {
-          background: rgba(251, 248, 241, 0.74);
+          background: #fbfcfe;
         }
 
-        .item-cell {
-          padding-right: 12px;
-        }
-
-        .item-name {
-          font-size: 14px;
-          font-weight: 800;
+        .product-name {
+          font-size: 13px;
+          font-weight: 700;
           margin-bottom: 4px;
         }
 
-        .item-meta {
-          color: var(--pf-muted);
+        .product-meta {
+          color: var(--muted);
           font-size: 11px;
-          line-height: 1.4;
+          line-height: 1.35;
         }
 
-        .item-chip {
+        .product-type {
           display: inline-block;
           margin-top: 8px;
-          border: 1px solid rgba(168, 109, 69, 0.2);
+          padding: 4px 8px;
+          border: 1px solid var(--line);
           border-radius: 999px;
-          padding: 4px 10px;
+          color: var(--muted);
           font-size: 10px;
-          font-weight: 800;
-          letter-spacing: 0.18em;
           text-transform: uppercase;
-          color: var(--pf-primary-dark);
-          background: rgba(255, 255, 255, 0.9);
+          letter-spacing: 0.14em;
+          background: #fff;
         }
 
         .mono {
           font-family: "Courier New", Courier, monospace;
+          color: var(--muted);
           font-size: 11px;
-          color: var(--pf-muted);
         }
 
         .center {
@@ -313,118 +287,81 @@ export function buildOrderPdfHtml(data: OrderPdfData) {
         }
 
         .strong {
-          font-weight: 800;
-          color: var(--pf-text);
-        }
-
-        .summary {
-          display: grid;
-          grid-template-columns: 1.1fr 0.9fr;
-          gap: 12px;
-          align-items: start;
-        }
-
-        .summary-card,
-        .note-card {
-          border: 1px solid var(--pf-border);
-          border-radius: 20px;
-          background: rgba(255, 255, 255, 0.88);
-          padding: 16px;
-        }
-
-        .summary-row {
-          display: flex;
-          justify-content: space-between;
-          gap: 16px;
-          padding: 8px 0;
-          font-size: 13px;
-        }
-
-        .summary-row.total {
-          margin-top: 10px;
-          padding-top: 14px;
-          border-top: 1px solid rgba(168, 109, 69, 0.16);
-          font-size: 18px;
-          font-weight: 900;
-        }
-
-        .summary-row strong {
-          font-weight: 900;
-        }
-
-        .note-title {
-          font-size: 11px;
-          text-transform: uppercase;
-          letter-spacing: 0.24em;
-          color: var(--pf-primary-dark);
-          font-weight: 800;
-          margin-bottom: 8px;
-        }
-
-        .note-text {
-          color: var(--pf-muted);
-          font-size: 12px;
-          line-height: 1.6;
+          font-weight: 700;
+          color: var(--text);
         }
 
         .footer {
-          margin-top: 16px;
+          display: flex;
+          justify-content: flex-end;
+        }
+
+        .totals {
+          width: min(100%, 420px);
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          background: #fff;
+          padding: 14px;
+        }
+
+        .section-title {
+          margin-bottom: 8px;
+          color: #334155;
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 0.18em;
+          font-weight: 700;
+        }
+
+        .total-row {
           display: flex;
           justify-content: space-between;
-          align-items: center;
-          gap: 20px;
-          color: var(--pf-muted);
-          font-size: 11px;
-          border-top: 1px solid rgba(168, 109, 69, 0.12);
-          padding-top: 12px;
+          gap: 12px;
+          padding: 7px 0;
+          font-size: 13px;
         }
+
+        .total-row.final {
+          border-top: 1px solid var(--line);
+          margin-top: 8px;
+          padding-top: 12px;
+          font-size: 16px;
+          font-weight: 800;
+        }
+
       </style>
     </head>
     <body>
-      <main class="sheet">
-        <section class="header">
-          <div>
-            <div class="brand">
-              <div class="brand-mark">PF</div>
-              <div>
-                <div class="brand-name">Pintofruta</div>
-                <div class="brand-subtitle">Pedido comercial</div>
-              </div>
+      <main class="page">
+        <section class="topbar">
+          <div class="brand">
+            <div class="brand-mark">PF</div>
+            <div>
+              <div class="brand-title">Pintofruta</div>
+              <div class="brand-subtitle">Pedido comercial</div>
             </div>
           </div>
 
-          <div class="meta-grid">
-            <div class="meta-card">
-              <div class="meta-label">Pedido</div>
-              <div class="meta-value">${escapeHtml(orderNumber)}</div>
-            </div>
-            <div class="meta-card">
-              <div class="meta-label">Fecha</div>
-              <div class="meta-value">${escapeHtml(generatedAt)}</div>
-            </div>
-            <div class="meta-card">
-              <div class="meta-label">Productos</div>
-              <div class="meta-value">${items.length}</div>
-            </div>
-            <div class="meta-card">
-              <div class="meta-label">Unidades</div>
-              <div class="meta-value">${totalItems}</div>
-            </div>
+          <div class="doc-meta">
+            <div class="doc-label">Pedido</div>
+            <div class="doc-value">${escapeHtml(orderNumber)}</div>
+            <div class="doc-label" style="margin-top: 10px;">Fecha</div>
+            <div class="doc-value">${escapeHtml(generatedAt)}</div>
           </div>
         </section>
 
-        <section class="highlight">
-          <div class="highlight-card">
-            <div class="highlight-label">Total estimado</div>
-            <div class="highlight-value">${formatCurrency(totalPrice)}</div>
+        <section class="summary">
+          <div class="summary-card">
+            <div class="label">Total estimado</div>
+            <div class="value">${formatCurrency(totalPrice)}</div>
           </div>
-          <div class="highlight-card">
-            <div class="highlight-label">Cantidad de líneas</div>
-            <div class="highlight-value">${items.length}</div>
+          <div class="summary-card">
+            <div class="label">Lineas</div>
+            <div class="value">${items.length}</div>
           </div>
-          <div class="highlight-card">
-            <div class="highlight-label">Unidades totales</div>
-            <div class="highlight-value">${totalItems}</div>
+          <div class="summary-card">
+            <div class="label">Unidades</div>
+            <div class="value">${totalItems}</div>
           </div>
         </section>
 
@@ -432,11 +369,11 @@ export function buildOrderPdfHtml(data: OrderPdfData) {
           <table>
             <thead>
               <tr>
-                <th style="width: 34%;">Producto</th>
+                <th style="width: 38%;">Producto</th>
                 <th style="width: 16%;">SKU</th>
                 <th style="width: 10%;" class="center">Cant.</th>
-                <th style="width: 20%;" class="right">Unitario</th>
-                <th style="width: 20%;" class="right">Subtotal</th>
+                <th style="width: 18%;" class="right">Unitario</th>
+                <th style="width: 18%;" class="right">Subtotal</th>
               </tr>
             </thead>
             <tbody>
@@ -445,35 +382,23 @@ export function buildOrderPdfHtml(data: OrderPdfData) {
           </table>
         </section>
 
-        <section class="summary">
-          <div class="summary-card">
-            <div class="summary-row">
+        <section class="footer">
+          <div class="totals">
+            <div class="section-title">Resumen</div>
+            <div class="total-row">
               <span>Subtotal</span>
               <strong>${formatCurrency(totalPrice)}</strong>
             </div>
-            <div class="summary-row">
+            <div class="total-row">
               <span>Unidades</span>
               <strong>${totalItems}</strong>
             </div>
-            <div class="summary-row total">
+            <div class="total-row final">
               <span>Total pedido</span>
               <strong>${formatCurrency(totalPrice)}</strong>
             </div>
-          </div>
-
-          <div class="note-card">
-            <div class="note-title">Observación</div>
-            <div class="note-text">
-              Este comprobante está pensado para revisión interna y envío al vendedor. Más adelante podemos agregar datos
-              de cliente, teléfono, dirección y un pie con condiciones de entrega.
-            </div>
-          </div>
+</div>
         </section>
-
-        <div class="footer">
-          <div>Pintofruta · Pedido generado automáticamente desde la tienda</div>
-          <div>Documento listo para compartir o enviar por mail</div>
-        </div>
       </main>
     </body>
   </html>`;
