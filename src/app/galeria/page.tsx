@@ -138,7 +138,7 @@ async function GalleryPageContent({ searchParams }: { searchParams: Promise<Gall
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="hidden items-center gap-3 sm:flex">
                 <span className="text-sm text-[var(--pf-muted)]">Tipo de vista:</span>
                 <div className="flex items-center gap-2">
                   {(["2", "3", "4"] as const).map((option) => {
@@ -358,7 +358,7 @@ async function GalleryPageContent({ searchParams }: { searchParams: Promise<Gall
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="hidden items-center gap-3 sm:flex">
                   <span className="text-sm text-[var(--pf-muted)]">Tipo de vista:</span>
                   <div className="flex items-center gap-2">
                     {(["2", "3", "4"] as const).map((option) => {
