@@ -142,26 +142,26 @@ export function ProductDetailModal({
         }
       }}
     >
-      <div className="modal-box max-w-6xl overflow-hidden rounded-[2rem] border border-[var(--pf-border-warm)] bg-[var(--pf-surface)] p-0 text-[var(--pf-text)] shadow-[0_30px_80px_rgba(74,57,38,0.26)]">
+      <div className="modal-box max-h-[calc(100dvh-1rem)] max-w-6xl overflow-y-auto overscroll-contain rounded-[2rem] border border-[var(--pf-border-warm)] bg-[var(--pf-surface)] p-0 text-[var(--pf-text)] shadow-[0_30px_80px_rgba(74,57,38,0.26)] sm:max-h-[calc(100dvh-2rem)]">
         {product ? (
           <div className="grid gap-0 lg:grid-cols-[1fr_1.05fr]">
-            <div className="relative min-h-[320px] bg-[linear-gradient(180deg,rgba(238,230,214,0.95),rgba(248,244,236,0.98))] p-6 sm:min-h-[420px] sm:p-8">
-              <div className="relative h-full min-h-[260px] overflow-hidden rounded-[1.75rem] bg-[rgba(255,255,255,0.92)]">
+            <div className="relative min-h-[220px] bg-[linear-gradient(180deg,rgba(238,230,214,0.95),rgba(248,244,236,0.98))] p-4 sm:min-h-[420px] sm:p-8">
+              <div className="relative h-full min-h-[180px] overflow-hidden rounded-[1.75rem] bg-[rgba(255,255,255,0.92)] sm:min-h-[260px]">
                 <Image
                   src={publicAsset(product.image)}
                   alt={product.name}
                   fill
-                  className="object-contain p-6"
+                  className="object-contain p-4 sm:p-6"
                   sizes="(max-width: 1024px) 100vw, 50vw"
                   priority
                 />
               </div>
             </div>
 
-            <div className="flex flex-col gap-5 p-6 sm:p-8">
+            <div className="flex min-h-0 flex-col gap-5 p-4 sm:p-8">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="text-3xl font-extrabold tracking-tight text-[var(--pf-text)] sm:text-5xl">{product.name}</h3>
+                  <h3 className="text-2xl font-extrabold tracking-tight text-[var(--pf-text)] sm:text-5xl">{product.name}</h3>
                 </div>
                 <form method="dialog">
                   <Button type="submit" variant="secondary" size="icon" aria-label="Cerrar">
@@ -171,7 +171,7 @@ export function ProductDetailModal({
               </div>
 
               {fullDescription ? (
-                <div className="max-w-2xl text-base leading-7 text-[var(--pf-muted)]">
+                <div className="max-w-2xl text-sm leading-6 text-[var(--pf-muted)] sm:text-base sm:leading-7">
                   <p>{shortDescription}</p>
                   {shouldTruncateDescription ? (
                     <button
@@ -186,12 +186,12 @@ export function ProductDetailModal({
               ) : null}
 
               <div className="rounded-[1.5rem] border border-[var(--pf-border)] bg-[rgba(255,255,255,0.8)] p-4">
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                   <div>
                     <p className="text-xs uppercase tracking-[0.28em] text-[var(--pf-muted)]">Cantidad</p>
                     <p className="mt-1 text-sm text-[var(--pf-muted)]">Elegí cuántas unidades querés agregar.</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
                     <Button
                       type="button"
                       variant="secondary"
@@ -239,7 +239,7 @@ export function ProductDetailModal({
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 pb-1">
                 <Badge variant="outline" className="border-[rgba(168,109,69,0.22)] text-[var(--pf-text)]">
                   {product.brand}
                 </Badge>
@@ -251,7 +251,7 @@ export function ProductDetailModal({
                 {product.testeadoEnAnimales === false ? <Badge variant="outline">Cruelty free</Badge> : null}
               </div>
 
-              <div className="mt-auto flex flex-wrap gap-3">
+              <div className="mt-auto flex flex-wrap gap-3 pb-2 sm:pb-0">
                 <CartAddButton
                   product={product}
                   quantity={safeQuantity}
@@ -289,11 +289,11 @@ export function ProductDetailModal({
           }
         }}
       >
-        <div className="modal-box max-w-3xl overflow-hidden rounded-[2rem] border border-[var(--pf-border-warm)] bg-[var(--pf-surface)] p-0 text-[var(--pf-text)] shadow-[0_30px_80px_rgba(74,57,38,0.26)]">
-          <div className="flex items-start justify-between gap-4 border-b border-[rgba(168,109,69,0.12)] p-6 sm:p-8">
+        <div className="modal-box max-h-[calc(100dvh-1rem)] max-w-3xl overflow-y-auto overscroll-contain rounded-[2rem] border border-[var(--pf-border-warm)] bg-[var(--pf-surface)] p-0 text-[var(--pf-text)] shadow-[0_30px_80px_rgba(74,57,38,0.26)] sm:max-h-[calc(100dvh-2rem)]">
+          <div className="flex items-start justify-between gap-4 border-b border-[rgba(168,109,69,0.12)] p-4 sm:p-8">
             <div>
               <p className="text-xs uppercase tracking-[0.3em] text-[var(--pf-muted)]">Detalle completo</p>
-              <h3 className="mt-2 text-2xl font-extrabold tracking-tight sm:text-4xl">{product?.name}</h3>
+              <h3 className="mt-2 text-xl font-extrabold tracking-tight sm:text-4xl">{product?.name}</h3>
             </div>
             <form method="dialog">
               <Button type="submit" variant="secondary" size="icon" aria-label="Cerrar detalle completo">
@@ -302,7 +302,7 @@ export function ProductDetailModal({
             </form>
           </div>
 
-          <div className="max-h-[70vh] overflow-y-auto p-6 text-base leading-7 text-[var(--pf-muted)] sm:p-8">
+          <div className="p-4 text-sm leading-6 text-[var(--pf-muted)] sm:max-h-[70vh] sm:overflow-y-auto sm:p-8 sm:text-base sm:leading-7">
             <p className="whitespace-pre-line">{fullDescription}</p>
           </div>
         </div>
