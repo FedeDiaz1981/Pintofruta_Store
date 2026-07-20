@@ -1,8 +1,13 @@
+import { connection } from "next/server";
 import Link from "next/link";
 import { CatalogGrid } from "@/components/site/catalog-grid";
 import { SectionHeading } from "@/components/site/section-heading";
 import { searchCatalog } from "@/application/catalog";
 import { buttonVariants } from "@/components/ui/button";
+
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+export const revalidate = 0;
 
 export default function SearchPage({
   searchParams,
@@ -17,6 +22,7 @@ async function SearchPageContent({
 }: {
   searchParams: Promise<{ q?: string; brand?: string; category?: string }>;
 }) {
+  await connection();
   const params = await searchParams;
   const products = await searchCatalog({
     query: params.q,
