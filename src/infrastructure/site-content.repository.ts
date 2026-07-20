@@ -19,7 +19,7 @@ import {
   type SiteMetaRow,
   type UserRow,
 } from "@/infrastructure/site-content/mappers";
-import { fallbackSiteContent, seedLockKey, toSeedNavigationRows, toSeedPackRows } from "@/infrastructure/site-content/seed";
+import { fallbackSiteContent, seedLockKey, toSeedBrandRows, toSeedNavigationRows, toSeedPackRows } from "@/infrastructure/site-content/seed";
 import { siteContentSchemaSql } from "@/infrastructure/site-content/schema";
 
 const ensureSchema = cache(async () => {
@@ -33,6 +33,60 @@ const ensureSchema = cache(async () => {
 async function countRows(client: PoolClient, table: string) {
   const result = await client.query<{ count: string }>(`select count(*)::text as count from ${table}`);
   return Number(result.rows[0]?.count ?? "0");
+}
+
+async function cleanupLegacyCategories(client: PoolClient) {
+  await client.query(
+    `
+      update categories
+      set deleted_at = coalesce(deleted_at, now())
+      where id <= 20
+    `,
+  );
+}
+
+async function getExistingProductIds(client: PoolClient) {
+  const result = await client.query<{ id: number }>("select id from products order by id");
+  return new Set(result.rows.map((row) => row.id));
+}
+
+async function seedPromotionPacks(client: PoolClient, existingProductIds: Set<number>) {
+  const seededPacks = toSeedPackRows();
+
+  for (const pack of seededPacks.packs) {
+    const packItems = seededPacks.items.filter((item) => item.pack_id === pack.id && existingProductIds.has(item.product_id));
+
+    if (packItems.length === 0) {
+      continue;
+    }
+
+    await client.query(
+      `
+        insert into promotion_packs (
+          id, apodo, title, description, category, public_price, image, active, featured, order_index
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      `,
+      [
+        pack.id,
+        pack.apodo,
+        pack.title,
+        pack.description,
+        pack.category,
+        pack.public_price,
+        pack.image,
+        pack.active,
+        pack.featured,
+        pack.order_index,
+      ],
+    );
+
+    for (const item of packItems) {
+      await client.query(
+        "insert into promotion_pack_items (pack_id, product_id, quantity, order_index) values ($1, $2, $3, $4)",
+        [item.pack_id, item.product_id, item.quantity, item.order_index],
+      );
+    }
+  }
 }
 
 async function seedIfNeeded(client: PoolClient) {
@@ -51,36 +105,7 @@ async function seedIfNeeded(client: PoolClient) {
     }
 
     if (metaCount > 0 && productCount > 0 && packCount === 0) {
-      const seededPacks = toSeedPackRows();
-
-      for (const pack of seededPacks.packs) {
-        await client.query(
-          `
-            insert into promotion_packs (
-              id, apodo, title, description, category, public_price, image, active, featured, order_index
-            ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-          `,
-          [
-            pack.id,
-            pack.apodo,
-            pack.title,
-            pack.description,
-            pack.category,
-            pack.public_price,
-            pack.image,
-            pack.active,
-            pack.featured,
-            pack.order_index,
-          ],
-        );
-      }
-
-      for (const item of seededPacks.items) {
-        await client.query(
-          "insert into promotion_pack_items (pack_id, product_id, quantity, order_index) values ($1, $2, $3, $4)",
-          [item.pack_id, item.product_id, item.quantity, item.order_index],
-        );
-      }
+      await seedPromotionPacks(client, await getExistingProductIds(client));
 
       await client.query("commit");
       return;
@@ -180,15 +205,15 @@ async function seedIfNeeded(client: PoolClient) {
 
     for (const category of fallbackSiteContent.categories ?? []) {
       await client.query(
-        "insert into categories (id, name, slug, visible) values ($1, $2, $3, $4)",
-        [category.id, category.name, category.slug, category.visible],
+        "insert into categories (id, name, slug, visible, deleted_at) values ($1, $2, $3, $4, $5)",
+        [category.id, category.name, category.slug, category.visible, category.id <= 20 ? new Date().toISOString() : null],
       );
     }
 
-    for (const brand of fallbackSiteContent.brands) {
+    for (const brand of toSeedBrandRows()) {
       await client.query(
-        "insert into brands (id, code, name, image, featured) values ($1, $2, $3, $4, $5)",
-        [brand.id, brand.code, brand.name, brand.image ?? null, brand.featured],
+        "insert into brands (id, code, name, image, featured, active) values ($1, $2, $3, $4, $5, $6)",
+        [brand.id, brand.code, brand.name, brand.image ?? null, brand.featured, brand.active ?? true],
       );
     }
 
@@ -210,7 +235,7 @@ async function seedIfNeeded(client: PoolClient) {
             $1, $2, $3, $4, $5, $6, $7, $8,
             $9, $10, $11, $12, $13, $14,
             $15, $16, $17, $18, $19, $20,
-            $21, $22
+            $21, $22, $23
           )
         `,
         [
@@ -241,36 +266,8 @@ async function seedIfNeeded(client: PoolClient) {
       );
     }
 
-    const seededPacks = toSeedPackRows();
-
-    for (const pack of seededPacks.packs) {
-      await client.query(
-        `
-          insert into promotion_packs (
-            id, apodo, title, description, category, public_price, image, active, featured, order_index
-          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-        `,
-        [
-          pack.id,
-          pack.apodo,
-          pack.title,
-          pack.description,
-          pack.category,
-          pack.public_price,
-          pack.image,
-          pack.active,
-          pack.featured,
-          pack.order_index,
-        ],
-      );
-    }
-
-    for (const item of seededPacks.items) {
-      await client.query(
-        "insert into promotion_pack_items (pack_id, product_id, quantity, order_index) values ($1, $2, $3, $4)",
-        [item.pack_id, item.product_id, item.quantity, item.order_index],
-      );
-    }
+    await seedPromotionPacks(client, await getExistingProductIds(client));
+    await cleanupLegacyCategories(client);
 
     await client.query("commit");
   } catch (error) {
@@ -295,6 +292,7 @@ export async function getSiteContent(): Promise<SiteContentDocument> {
 
   try {
     await seedIfNeeded(client);
+    await cleanupLegacyCategories(client);
 
     const metaRows = await readRows<SiteMetaRow>(
       client,
@@ -326,7 +324,7 @@ export async function getSiteContent(): Promise<SiteContentDocument> {
     );
     const productRows = await readRows<ProductRow>(
       client,
-      "select id, sku, name, detail, presentation, category_id, category_name, brand, vegano, kosher, testeado_en_animales, public_price, member_price, image, status, featured, featured_priority, trending, stock, views_count, sales_count, description, source_section, created_at, updated_at from products order by id",
+      "select id, sku, name, detail, presentation, category_id, category_name, category_ids, category_names, brand, vegano, kosher, testeado_en_animales, public_price, member_price, image, status, featured, featured_priority, trending, stock, views_count, sales_count, description, source_section, created_at, updated_at from products where deleted_at is null order by id",
     );
     const packRows = await readRows<PackRow>(
       client,
@@ -338,11 +336,11 @@ export async function getSiteContent(): Promise<SiteContentDocument> {
     );
     const brandRows = await readRows<BrandRow>(
       client,
-      "select id, code, name, image, featured from brands order by featured desc, name",
+      "select id, code, name, image, featured, active from brands order by featured desc, name",
     );
     const categoryRows = await readRows<CategoryRow>(
       client,
-      "select id, name, slug, visible from categories order by id",
+      "select id, name, slug, visible from categories where deleted_at is null order by id",
     );
     const userRows = await readRows<UserRow>(
       client,

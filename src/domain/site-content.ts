@@ -56,6 +56,8 @@ export interface ProductItem {
   presentation: string;
   categoryId: number;
   categoryName: string;
+  categoryIds?: number[];
+  categoryNames?: string[];
   brand: string;
   vegano: boolean;
   kosher: boolean;
@@ -111,6 +113,7 @@ export interface BrandItem {
   name: string;
   image?: string;
   featured: boolean;
+  active?: boolean;
 }
 
 export interface UserItem {

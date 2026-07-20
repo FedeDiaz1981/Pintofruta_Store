@@ -1,46 +1,98 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useMemo } from "react";
+import useEmblaCarousel from "embla-carousel-react";
 import type { BrandItem } from "@/domain/site-content";
 import { publicAsset } from "@/lib/catalog";
 
+function MobileBrandRail({ brands }: { brands: BrandItem[] }) {
+  const [emblaRef] = useEmblaCarousel({ loop: brands.length > 2, align: "start" });
+
+  return (
+    <div className="relative md:hidden">
+      <div ref={emblaRef} className="overflow-hidden">
+        <div className="flex touch-pan-y">
+          {brands.map((brand) => {
+            const hasImage = Boolean(brand.image);
+
+            return (
+              <div key={brand.id} className="min-w-0 flex-[0_0_42vw] px-2 sm:flex-[0_0_32vw]">
+                <Link
+                  href={`/galeria?brand=${encodeURIComponent(brand.name)}`}
+                  className="flex h-[132px] items-center justify-center rounded-[1.35rem] border border-[rgba(168,109,69,0.12)] bg-[rgba(255,255,255,0.64)] px-3 py-4 shadow-[0_10px_24px_rgba(74,57,38,0.06)]"
+                >
+                  {hasImage ? (
+                    <div className="relative h-[72px] w-full">
+                      <Image
+                        src={publicAsset(brand.image)}
+                        alt={brand.name}
+                        fill
+                        className="object-contain p-1"
+                        sizes="42vw"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-[72px] w-full items-center justify-center px-2 text-center">
+                      <span className="text-[0.88rem] font-semibold tracking-[0.04em] text-[var(--pf-text)]">{brand.name}</span>
+                    </div>
+                  )}
+                </Link>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function BrandLogoWall({ brands }: { brands: BrandItem[] }) {
-  if (brands.length === 0) {
+  const visibleBrands = brands.filter((brand) => brand.active !== false);
+
+  const sortedBrands = useMemo(
+    () => [...visibleBrands].sort((left, right) => left.name.localeCompare(right.name, "es", { sensitivity: "base" })),
+    [visibleBrands],
+  );
+
+  if (sortedBrands.length === 0) {
     return null;
   }
 
-  const sortedBrands = [...brands].sort((left, right) => left.name.localeCompare(right.name, "es", { sensitivity: "base" }));
-
   return (
-    <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-      {sortedBrands.map((brand) => {
-        const hasImage = Boolean(brand.image);
+    <div className="space-y-4">
+      <MobileBrandRail brands={sortedBrands} />
 
-        return (
-          <Link
-            key={brand.id}
-            href={`/galeria?brand=${encodeURIComponent(brand.name)}`}
-            className="group flex min-h-[132px] items-center justify-center rounded-[1.5rem] border border-transparent bg-transparent p-4 transition duration-300 hover:-translate-y-1 hover:bg-[rgba(255,255,255,0.18)]"
-          >
-            {hasImage ? (
-              <div className="relative h-[72px] w-full">
-                <Image
-                  src={publicAsset(brand.image)}
-                  alt={brand.name}
-                  fill
-                  className="object-contain p-1 transition duration-300 group-hover:scale-[1.03]"
-                  sizes="(max-width: 768px) 50vw, 16vw"
-                />
-              </div>
-            ) : (
-              <div className="flex h-[72px] w-full items-center justify-center px-2 text-center">
-                <span className="text-[0.95rem] font-semibold tracking-[0.04em] text-[var(--pf-text)]">
-                  {brand.name}
-                </span>
-              </div>
-            )}
-          </Link>
-        );
-      })}
+      <div className="hidden gap-3 sm:grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+        {sortedBrands.map((brand) => {
+          const hasImage = Boolean(brand.image);
+
+          return (
+            <Link
+              key={brand.id}
+              href={`/galeria?brand=${encodeURIComponent(brand.name)}`}
+              className="group flex min-h-[132px] items-center justify-center rounded-[1.5rem] border border-transparent bg-transparent p-4 transition duration-300 hover:-translate-y-1 hover:bg-[rgba(255,255,255,0.18)]"
+            >
+              {hasImage ? (
+                <div className="relative h-[72px] w-full">
+                  <Image
+                    src={publicAsset(brand.image)}
+                    alt={brand.name}
+                    fill
+                    className="object-contain p-1 transition duration-300 group-hover:scale-[1.03]"
+                    sizes="(max-width: 768px) 50vw, 16vw"
+                  />
+                </div>
+              ) : (
+                <div className="flex h-[72px] w-full items-center justify-center px-2 text-center">
+                  <span className="text-[0.95rem] font-semibold tracking-[0.04em] text-[var(--pf-text)]">{brand.name}</span>
+                </div>
+              )}
+            </Link>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import type {
   BrandItem,
   CatalogFilters,
   CategoryItem,
+  BannerItem,
   HomePageViewModel,
   PackItem,
   ProductItem,
@@ -133,9 +134,13 @@ function filterCatalogProducts(products: ProductItem[], filters: CatalogFilters 
       normalizeText(item.detail).includes(query) ||
       normalizeText(item.brand).includes(query) ||
       normalizeText(item.categoryName).includes(query) ||
+      (item.categoryNames ?? []).some((categoryName) => normalizeText(categoryName).includes(query)) ||
       normalizeText(item.sku).includes(query);
     const matchesBrand = !brand || normalizeText(item.brand).includes(brand);
-    const matchesCategory = !category || normalizeText(item.categoryName).includes(category);
+    const matchesCategory =
+      !category ||
+      normalizeText(item.categoryName).includes(category) ||
+      (item.categoryNames ?? []).some((categoryName) => normalizeText(categoryName).includes(category));
 
     return matchesQuery && matchesBrand && matchesCategory;
   });
@@ -145,7 +150,7 @@ function filterCatalogPacks(packs: PackItem[], query = "") {
   const normalizedQuery = normalizeText(query);
 
   return packs.filter((item) => {
-    if (!item.active) {
+    if (!item.active || item.items.length === 0) {
       return false;
     }
 
@@ -161,7 +166,8 @@ function filterCatalogPacks(packs: PackItem[], query = "") {
       item.items.some((selected) =>
         normalizeText(selected.product.name).includes(normalizedQuery) ||
         normalizeText(selected.product.brand).includes(normalizedQuery) ||
-        normalizeText(selected.product.categoryName).includes(normalizedQuery),
+        normalizeText(selected.product.categoryName).includes(normalizedQuery) ||
+        (selected.product.categoryNames ?? []).some((categoryName) => normalizeText(categoryName).includes(normalizedQuery)),
       )
     );
   });
@@ -169,16 +175,21 @@ function filterCatalogPacks(packs: PackItem[], query = "") {
 
 function buildFacetOptions(
   products: ProductItem[],
-  selector: (product: ProductItem) => string,
+  selector: (product: ProductItem) => string | string[],
 ): CatalogFacetOption[] {
   const counts = new Map<string, number>();
 
   for (const product of products) {
-    const value = selector(product).trim();
-    if (!value) {
-      continue;
+    const selectedValues = selector(product);
+    const values = Array.isArray(selectedValues) ? selectedValues : [selectedValues];
+
+    for (const entry of values) {
+      const value = entry.trim();
+      if (!value) {
+        continue;
+      }
+      counts.set(value, (counts.get(value) ?? 0) + 1);
     }
-    counts.set(value, (counts.get(value) ?? 0) + 1);
   }
 
   return [...counts.entries()]
@@ -277,21 +288,31 @@ function buildFeaturedProducts(products: ProductItem[], limit = 12) {
 
 export async function getDynamicHeaderMenus(): Promise<DynamicHeaderMenu[]> {
   const content = await getSiteContent();
+  const activeBrands = content.brands.filter((brand) => brand.active !== false);
+  const visibleCategories = (content.categories ?? []).filter((category) => category.visible);
 
   return [
-    buildDynamicMenu<BrandItem>(content.brands, {
+    buildDynamicMenu<BrandItem>(activeBrands, {
       key: "brands",
       label: "Marcas",
       href: "/galeria?brand=",
-      linkFor: (brand) => `/galeria?brand=${encodeURIComponent(brand.name)}`,
+      linkFor: (brand) => "/galeria?brand=" + encodeURIComponent(brand.name),
     }),
-    buildDynamicMenu<CategoryItem>(content.categories ?? [], {
+    buildDynamicMenu<CategoryItem>(visibleCategories, {
       key: "categories",
       label: "Categorías",
       href: "/galeria?category=",
-      linkFor: (category) => `/galeria?category=${encodeURIComponent(category.name)}`,
+      linkFor: (category) => "/galeria?category=" + encodeURIComponent(category.name),
     }),
   ];
+}
+
+export async function getActiveSiteBanners(): Promise<BannerItem[]> {
+  const content = await getSiteContent();
+
+  return [...(content.banners ?? [])]
+    .filter((item) => item.active && item.text.trim().length > 0)
+    .sort((left, right) => left.order - right.order);
 }
 
 export async function getHomePageViewModel(): Promise<HomePageViewModel> {
@@ -306,10 +327,10 @@ export async function getHomePageViewModel(): Promise<HomePageViewModel> {
     .filter((item) => item.status === "published" && item.trending)
     .slice(0, 8);
   const activePromotions = [...(content.packs ?? [])]
-    .filter((item) => item.active)
+    .filter((item) => item.active && item.items.length > 0)
     .sort((left, right) => (left.order ?? 0) - (right.order ?? 0) || left.title.localeCompare(right.title, "es", { sensitivity: "base" }));
-  const brands = [...content.brands];
-  const featuredBrands = content.brands.filter((item) => item.featured).slice(0, 6);
+  const brands = content.brands.filter((brand) => brand.active !== false);
+  const featuredBrands = brands.filter((item) => item.featured).slice(0, 6);
 
   return {
     banners,
@@ -323,8 +344,8 @@ export async function getHomePageViewModel(): Promise<HomePageViewModel> {
     activePromotions,
     featuredBrands,
     stats: [
-      { label: "marcas", value: String(content.brands.length) },
-      { label: "productos", value: String(content.products.length) },
+      { label: "marcas", value: String(brands.length) },
+      { label: "productos", value: String(content.products.filter((product) => product.status === "published").length) },
       { label: "destacados", value: String(featuredProducts.length) },
     ],
   };
@@ -361,11 +382,19 @@ export async function getGalleryPageViewModel(filters: CatalogFilters = {}): Pro
     return true;
   });
   const publishedProducts = filterCatalogProducts(baseProducts);
+  const activeBrandNames = new Set(content.brands.filter((brand) => brand.active !== false).map((brand) => normalizeText(brand.name)));
+  const visibleCategoryNames = new Set((content.categories ?? []).filter((category) => category.visible).map((category) => normalizeText(category.name)));
+  const brandFacetOptions = buildFacetOptions(publishedProducts, (product) => product.brand).filter((item) =>
+    activeBrandNames.has(normalizeText(item.value)),
+  );
+  const categoryFacetOptions = buildFacetOptions(publishedProducts, (product) => [product.categoryName, ...(product.categoryNames ?? [])]).filter((item) =>
+    visibleCategoryNames.has(normalizeText(item.value)),
+  );
 
   return {
     products: filterCatalogProducts(baseProducts, filters),
-    brands: buildFacetOptions(publishedProducts, (product) => product.brand),
-    categories: buildFacetOptions(publishedProducts, (product) => product.categoryName),
+    brands: brandFacetOptions,
+    categories: categoryFacetOptions,
     activeBrand: filters.brand ? normalizeText(filters.brand) : "",
     activeCategory: filters.category ? normalizeText(filters.category) : "",
     query: filters.query ? filters.query.trim() : "",

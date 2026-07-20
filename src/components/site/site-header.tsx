@@ -6,6 +6,7 @@ import { CartButton } from "@/components/cart/cart-button";
 import { publicAsset } from "@/lib/catalog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MobileHeaderDrawer } from "@/components/site/mobile-header-drawer";
 
 export async function SiteHeader() {
   return <SiteHeaderContent />;
@@ -17,7 +18,7 @@ async function SiteHeaderContent() {
   return (
     <header className="sticky top-0 z-[10010]">
       <div className="border-b border-[var(--pf-border)] bg-[rgba(248,242,232,0.96)] shadow-[0_14px_32px_rgba(74,57,38,0.08)] backdrop-blur">
-        <div className="pf-shell grid gap-4 px-4 py-4 lg:grid-cols-[auto_1fr_auto] lg:items-center lg:gap-6 lg:px-12">
+        <div className="pf-shell hidden gap-4 px-4 py-4 lg:grid lg:grid-cols-[auto_1fr_auto] lg:items-center lg:gap-6 lg:px-12">
           <Link
             href="/"
             className="mx-auto flex items-center justify-center rounded-full border-2 border-[rgba(168,109,69,0.32)] bg-[linear-gradient(90deg,rgba(168,109,69,0.20),rgba(200,176,137,0.28),rgba(246,240,230,0.6))] px-4 py-2 shadow-[0_8px_18px_rgba(74,57,38,0.10),inset_0_0_0_1px_rgba(255,255,255,0.10)] lg:mx-0"
@@ -73,9 +74,63 @@ async function SiteHeaderContent() {
             </Link>
           </div>
         </div>
+
+        <div className="pf-shell flex flex-col gap-3 px-4 py-3 lg:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <Link
+              href="/"
+              className="flex items-center justify-center rounded-full border-2 border-[rgba(168,109,69,0.28)] bg-[linear-gradient(90deg,rgba(168,109,69,0.18),rgba(200,176,137,0.24),rgba(246,240,230,0.6))] px-3 py-2 shadow-[0_8px_18px_rgba(74,57,38,0.08),inset_0_0_0_1px_rgba(255,255,255,0.12)]"
+            >
+              <Image
+                src={publicAsset("/assets/images/logo/logo-Pintofruta.png")}
+                alt="Pintofruta"
+                width={210}
+                height={56}
+                className="h-auto w-[132px] max-w-full"
+                priority
+              />
+            </Link>
+
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="secondary" size="icon" aria-label="Cuenta">
+                <UserRound className="size-4" />
+              </Button>
+              <Link
+                href="/carrito"
+                className={`${buttonVariants({ variant: "secondary", size: "icon" })}`}
+                aria-label="Carrito"
+              >
+                <ShoppingCart className="size-4" />
+              </Link>
+              <MobileHeaderDrawer menus={menus} />
+            </div>
+          </div>
+
+          <form action="/busqueda" method="get" className="w-full">
+            <div className="overflow-hidden rounded-full border border-[var(--pf-border)] bg-[var(--pf-surface)] shadow-[var(--pf-shadow-soft)]">
+              <div className="flex flex-row">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="icon"
+                  className="min-h-[48px] w-[48px] rounded-none"
+                  aria-label="Buscar"
+                >
+                  <Search className="size-5" />
+                </Button>
+                <Input
+                  type="text"
+                  name="q"
+                  placeholder="Buscar"
+                  className="min-h-[48px] flex-1 rounded-none border-0 bg-transparent px-4 shadow-none focus:ring-0"
+                />
+              </div>
+            </div>
+          </form>
+        </div>
       </div>
 
-      <div className="border-b border-[var(--pf-border-soft)] bg-white/90 shadow-[0_1px_1px_hsla(0,0%,0%,0.06),0_2px_2px_hsla(0,0%,0%,0.06)]">
+      <div className="hidden border-b border-[var(--pf-border-soft)] bg-white/90 shadow-[0_1px_1px_hsla(0,0%,0%,0.06),0_2px_2px_hsla(0,0%,0%,0.06)] lg:block">
         <div className="pf-shell px-4 lg:px-12">
           <nav className="grid grid-cols-2 border-x border-[var(--pf-border-soft)] bg-white">
               {menus.map((menu) => (

@@ -78,6 +78,7 @@ export type SeedBrand = {
   name: string;
   image: string | null;
   featured: boolean;
+  active: boolean | null;
 };
 
 export type SeedUser = {
@@ -97,6 +98,8 @@ export type SeedProduct = {
   presentation: string;
   category_id: number;
   category_name: string;
+  category_ids: number[] | null;
+  category_names: string[] | null;
   brand: string;
   vegano: boolean;
   kosher: boolean;
@@ -222,4 +225,12 @@ export function toSeedPackRows() {
     packs,
     items,
   };
+}
+
+export function toSeedBrandRows() {
+  return (fallbackSiteContent.brands ?? []).map((brand) => ({
+    ...brand,
+    image: brand.image ?? null,
+    active: brand.active ?? true,
+  })) satisfies SeedBrand[];
 }

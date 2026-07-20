@@ -66,16 +66,22 @@ export const siteContentSchemaSql = `
     id integer primary key,
     name text not null,
     slug text not null,
-    visible boolean not null
+    visible boolean not null,
+    deleted_at timestamptz
   );
+
+  alter table categories add column if not exists deleted_at timestamptz;
 
   create table if not exists brands (
     id text primary key,
     code text not null unique,
     name text not null,
     image text,
-    featured boolean not null
+    featured boolean not null,
+    active boolean not null default true
   );
+
+  alter table brands add column if not exists active boolean not null default true;
 
   create table if not exists users (
     id integer primary key,
@@ -94,6 +100,8 @@ export const siteContentSchemaSql = `
     presentation text not null,
     category_id integer not null references categories(id),
     category_name text not null,
+    category_ids jsonb not null default '[]'::jsonb,
+    category_names jsonb not null default '[]'::jsonb,
     brand text not null,
     vegano boolean not null,
     kosher boolean not null,
@@ -110,6 +118,7 @@ export const siteContentSchemaSql = `
     sales_count integer not null default 0,
     description text,
     source_section text,
+    deleted_at timestamptz,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
   );
@@ -119,6 +128,9 @@ export const siteContentSchemaSql = `
   alter table products add column if not exists featured_priority integer;
   alter table products add column if not exists views_count integer not null default 0;
   alter table products add column if not exists sales_count integer not null default 0;
+  alter table products add column if not exists category_ids jsonb not null default '[]'::jsonb;
+  alter table products add column if not exists category_names jsonb not null default '[]'::jsonb;
+  alter table products add column if not exists deleted_at timestamptz;
 
   create table if not exists promotion_packs (
     id integer primary key,

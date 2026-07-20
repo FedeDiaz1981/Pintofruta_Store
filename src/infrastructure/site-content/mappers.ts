@@ -45,6 +45,24 @@ export type PackItemRow = {
   order_index: number;
 };
 
+function toNumberArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => Number(item))
+    .filter((item) => Number.isFinite(item));
+}
+
+function toStringArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item) => String(item).trim()).filter(Boolean);
+}
+
 export function mapHeaderNavigation(
   scopesRows: SearchScopeRow[],
   sectionsRows: NavSectionRow[],
@@ -102,14 +120,21 @@ export function mapSiteContentDocument(params: {
   const productMap = new Map<number, ProductItem>();
 
   const mappedProducts = products.map((product) => {
+    const categoryIds = toNumberArray(product.category_ids);
+    const categoryNames = toStringArray(product.category_names);
+    const primaryCategoryId = categoryIds[0] ?? product.category_id;
+    const primaryCategoryName = categoryNames[0] ?? product.category_name;
+
     const mapped: ProductItem = {
       id: product.id,
       sku: product.sku,
       name: product.name,
       detail: product.detail,
       presentation: product.presentation,
-      categoryId: product.category_id,
-      categoryName: product.category_name,
+      categoryId: primaryCategoryId,
+      categoryName: primaryCategoryName,
+      categoryIds: categoryIds.length > 0 ? categoryIds : [product.category_id],
+      categoryNames: categoryNames.length > 0 ? categoryNames : [product.category_name],
       brand: product.brand,
       vegano: product.vegano,
       kosher: product.kosher,
@@ -204,6 +229,7 @@ export function mapSiteContentDocument(params: {
       name: brand.name,
       image: brand.image ?? undefined,
       featured: brand.featured,
+      active: brand.active ?? undefined,
     })),
     categories: categories.map((category) => ({
       id: category.id,

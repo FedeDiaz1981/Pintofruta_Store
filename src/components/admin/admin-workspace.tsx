@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { deleteAdminRecord, saveAdminRecord } from "@/app/admin/actions";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { deleteAdminRecord, deleteAdminRecords, saveAdminRecord } from "@/app/admin/actions";
+import { ExcelImportButton } from "@/components/admin/excel-import-button";
 import type {
   AdminCrudViewModel,
   AdminFieldDefinition,
   AdminTableDefinition,
   AdminTableKey,
 } from "@/application/admin-crud";
+import type { ProductItem } from "@/domain/site-content";
 import { formatCurrency } from "@/lib/catalog";
 
 type DraftRecord = Record<string, string | number | boolean | null>;
@@ -19,16 +21,10 @@ type PackSelection = {
   order: number;
 };
 
-type CatalogProductRow = {
-  id: number;
-  sku: string;
-  name: string;
-  brand: string;
-  categoryName: string;
-  publicPrice: number;
-  image?: string;
-  stock?: number;
-};
+type CatalogProductRow = Pick<
+  ProductItem,
+  "id" | "sku" | "name" | "brand" | "categoryName" | "categoryNames" | "publicPrice" | "image" | "stock"
+>;
 
 type EditorState = {
   tableKey: AdminTableKey;
@@ -36,13 +32,30 @@ type EditorState = {
   draft: DraftRecord;
 };
 
+type BulkDeleteState = {
+  open: boolean;
+  loading: boolean;
+  count: number;
+  message?: string;
+  error?: string;
+};
+
 const sidebarSections: { title: string; keys: AdminTableKey[] }[] = [
   { title: "Listas", keys: ["products", "packs", "brands", "categories", "users"] },
   { title: "Contenido", keys: ["hero_slides", "banners"] },
-  { title: "Registro", keys: ["site_content_meta"] },
 ];
 
 function toDraftValue(field: AdminFieldDefinition, value: unknown): string | number | boolean | null {
+  if (field.key === "role" && field.kind === "select" && typeof value === "string") {
+    const normalized = value.toLowerCase();
+    if (normalized === "admin") {
+      return "Administrador";
+    }
+    if (normalized === "customer" || normalized === "client") {
+      return "Cliente";
+    }
+  }
+
   if (field.kind === "pack_products") {
     if (typeof value === "string") {
       return value;
@@ -53,6 +66,26 @@ function toDraftValue(field: AdminFieldDefinition, value: unknown): string | num
     }
 
     return "[]";
+  }
+
+  if (field.kind === "multiselect") {
+    if (typeof value === "string") {
+      return value;
+    }
+
+    if (Array.isArray(value)) {
+      return JSON.stringify(value);
+    }
+
+    return "[]";
+  }
+
+  if (field.kind === "file") {
+    return value == null ? "" : String(value);
+  }
+
+  if (field.kind === "select") {
+    return value == null ? "" : String(value);
   }
 
   if (field.kind === "boolean") {
@@ -75,11 +108,11 @@ function emptyDraftFor(table: AdminTableDefinition): DraftRecord {
 
   for (const field of table.fields) {
     if (field.kind === "boolean") {
-      draft[field.key] = false;
+      draft[field.key] = ["active", "visible"].includes(field.key);
       continue;
     }
 
-    if (field.kind === "pack_products") {
+    if (field.kind === "pack_products" || field.kind === "multiselect") {
       draft[field.key] = "[]";
       continue;
     }
@@ -98,6 +131,11 @@ function draftFromRow(table: AdminTableDefinition, row: Record<string, unknown> 
   }
 
   for (const field of table.fields) {
+    if (table.key === "products" && field.key === "active" && field.kind === "boolean" && row.active == null) {
+      draft[field.key] = String(row.status ?? "").toLowerCase() !== "inactive";
+      continue;
+    }
+
     draft[field.key] = toDraftValue(field, row[field.key]);
   }
 
@@ -144,6 +182,28 @@ function parsePackSelections(value: unknown): PackSelection[] {
   }
 }
 
+function parseMultiSelectValues(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) {
+    return [] as string[];
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown[];
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.map((item) => String(item)).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function serializeMultiSelectValues(values: string[]) {
+  return JSON.stringify(values);
+}
+
 function serializePackSelections(selections: PackSelection[]) {
   return JSON.stringify(selections.map((item, index) => ({ ...item, order: index + 1 })));
 }
@@ -151,6 +211,23 @@ function serializePackSelections(selections: PackSelection[]) {
 function formatCellValue(field: AdminFieldDefinition | undefined, value: unknown) {
   if (field?.kind === "boolean") {
     return value ? "Activo" : "Inactivo";
+  }
+
+  if (field?.kind === "multiselect") {
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value) as unknown[];
+        if (Array.isArray(parsed)) {
+          return parsed.map((item) => String(item)).filter(Boolean).join(", ");
+        }
+      } catch {
+        return value;
+      }
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => String(item)).filter(Boolean).join(", ");
+    }
   }
 
   if (field?.key === "role" && typeof value === "string") {
@@ -257,8 +334,42 @@ function getMaxOrder(rows: Record<string, unknown>[]) {
   return max;
 }
 
+function getSidebarCount(table: AdminTableDefinition) {
+  const rows = table.rows as Record<string, unknown>[];
+
+  return rows.filter((row) => isVisibleAdminRow(table.key, row)).length;
+}
+
 function getRowId(table: AdminTableDefinition, row: Record<string, unknown>) {
   return String(row[table.idField] ?? "");
+}
+
+function isVisibleAdminRow(tableKey: AdminTableKey, row: Record<string, unknown>) {
+  if (tableKey === "brands") {
+    return row.active !== false;
+  }
+
+  if (tableKey === "categories") {
+    return row.visible !== false;
+  }
+
+  if (tableKey === "products") {
+    return String(row.status ?? "").toLowerCase() !== "inactive";
+  }
+
+  if (typeof row.active === "boolean") {
+    return row.active;
+  }
+
+  if (typeof row.visible === "boolean") {
+    return row.visible;
+  }
+
+  if (typeof row.status === "string") {
+    return row.status.toLowerCase() !== "inactive";
+  }
+
+  return true;
 }
 
 function PackProductsField({
@@ -283,7 +394,7 @@ function PackProductsField({
       return true;
     }
 
-    return [product.name, product.sku, product.brand, product.categoryName]
+    return [product.name, product.sku, product.brand, product.categoryName, ...(product.categoryNames ?? [])]
       .filter(Boolean)
       .some((entry) => String(entry).toLowerCase().includes(normalizedSearch));
   });
@@ -380,7 +491,12 @@ function PackProductsField({
         </div>
 
         <div className="divide-y divide-slate-100">
-          {filteredProducts.map((product) => {
+          {filteredProducts.length === 0 ? (
+            <div className="px-4 py-6 text-sm text-slate-500">
+              No hay productos cargados para seleccionar. Primero completá la tabla de productos.
+            </div>
+          ) : (
+            filteredProducts.map((product) => {
             const productId = Number(product.id);
             const selected = selectedIds.has(productId);
             const selection = selections.find((item) => item.productId === productId);
@@ -418,7 +534,8 @@ function PackProductsField({
                 </button>
               </div>
             );
-          })}
+            })
+          )}
         </div>
       </div>
     </div>
@@ -426,14 +543,18 @@ function PackProductsField({
 }
 
 export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
-  const { overview, tables } = model;
+  const { overview, tables, productSelectionRows } = model;
   const initialTableKey = (tables.find((table) => table.key === "hero_slides")?.key ?? tables[0]?.key ?? "") as AdminTableKey;
 
   const [selectedTableKey, setSelectedTableKey] = useState<AdminTableKey>(initialTableKey);
   const [query, setQuery] = useState("");
   const [packSearch, setPackSearch] = useState("");
+  const [fileNames, setFileNames] = useState<Record<string, string>>({});
   const [selectedRowId, setSelectedRowId] = useState("");
+  const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const [bulkDeleteState, setBulkDeleteState] = useState<BulkDeleteState | null>(null);
+  const selectAllRef = useRef<HTMLInputElement | null>(null);
 
   const selectedTable = useMemo(
     () => tables.find((table) => table.key === selectedTableKey) ?? tables[0],
@@ -441,36 +562,111 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   );
 
   const selectedRows = useMemo(() => (selectedTable?.rows as Record<string, unknown>[]) ?? [], [selectedTable]);
-  const productRows = useMemo(
-    () => (tables.find((table) => table.key === "products")?.rows as CatalogProductRow[]) ?? [],
-    [tables],
-  );
   const fieldMap = useMemo(() => new Map(selectedTable?.fields.map((field) => [field.key, field]) ?? []), [selectedTable]);
 
   const visibleRows = useMemo(() => {
     const normalized = query.trim().toLowerCase();
 
-    if (!normalized) {
-      return selectedRows;
+    const queryFilteredRows = !normalized
+      ? selectedRows
+      : selectedRows.filter((row) =>
+          Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(normalized)),
+      );
+
+    return queryFilteredRows.filter((row) => isVisibleAdminRow(selectedTable.key, row));
+  }, [query, selectedRows, selectedTable.key]);
+
+  const visibleRowIds = useMemo(() => visibleRows.map((row) => getRowId(selectedTable, row)), [selectedTable, visibleRows]);
+  const selectedRowIdSet = useMemo(() => new Set(selectedRowIds), [selectedRowIds]);
+  const selectedVisibleCount = useMemo(
+    () => visibleRowIds.filter((rowId) => selectedRowIdSet.has(rowId)).length,
+    [selectedRowIdSet, visibleRowIds],
+  );
+  const allVisibleSelected = visibleRowIds.length > 0 && selectedVisibleCount === visibleRowIds.length;
+  const someVisibleSelected = selectedVisibleCount > 0 && !allVisibleSelected;
+
+  const activeCount = getActiveCount(visibleRows as Record<string, unknown>[]);
+  const maxOrder = getMaxOrder(visibleRows as Record<string, unknown>[]);
+  const totalCount = visibleRows.length;
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someVisibleSelected;
     }
-
-    return selectedRows.filter((row) =>
-      Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(normalized)),
-    );
-  }, [query, selectedRows]);
-
-  const activeCount = getActiveCount(selectedRows);
-  const maxOrder = getMaxOrder(selectedRows);
-  const totalCount = selectedRows.length;
+  }, [someVisibleSelected, visibleRowIds]);
 
   async function handleSave(formData: FormData) {
     await saveAdminRecord(formData);
     setEditor(null);
   }
 
+  async function handleBulkDelete() {
+    if (selectedRowIds.length === 0) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Borrar ${selectedRowIds.length} elementos seleccionados?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setBulkDeleteState({
+      open: true,
+      loading: true,
+      count: selectedRowIds.length,
+    });
+
+    try {
+      const formData = new FormData();
+      formData.set("table", selectedTable.key);
+      formData.set("ids_json", JSON.stringify(selectedRowIds));
+
+      await deleteAdminRecords(formData);
+
+      setSelectedRowIds([]);
+      setSelectedRowId("");
+      setBulkDeleteState({
+        open: true,
+        loading: false,
+        count: 0,
+        message: "Borrado completado",
+      });
+
+      window.setTimeout(() => {
+        setBulkDeleteState(null);
+      }, 1200);
+    } catch (error) {
+      setBulkDeleteState({
+        open: true,
+        loading: false,
+        count: selectedRowIds.length,
+        error: error instanceof Error ? error.message : "No se pudo borrar.",
+      });
+    }
+  }
+
+  async function handleQuickDelete(table: AdminTableDefinition, row: Record<string, unknown>) {
+    const rowId = getRowId(table, row);
+    const rowLabel = String(row[table.rowLabelField] ?? rowId);
+
+    if (!window.confirm(`Eliminar ${rowLabel}?`)) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.set("table", table.key);
+    formData.set("id", rowId);
+
+    await deleteAdminRecord(formData);
+
+    setSelectedRowIds((current) => current.filter((id) => id !== rowId));
+    setSelectedRowId((current) => (current === rowId ? "" : current));
+  }
+
   function openNew(table: AdminTableDefinition) {
     setSelectedTableKey(table.key);
     setSelectedRowId("");
+    setSelectedRowIds([]);
     setQuery("");
     setPackSearch("");
     setEditor({
@@ -485,6 +681,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
 
     setSelectedTableKey(table.key);
     setSelectedRowId(rowId);
+    setSelectedRowIds([]);
     setPackSearch("");
     setEditor({
       tableKey: table.key,
@@ -544,6 +741,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                           onClick={() => {
                             setSelectedTableKey(table.key);
                             setSelectedRowId("");
+                            setSelectedRowIds([]);
                             setQuery("");
                             setPackSearch("");
                             setEditor(null);
@@ -556,7 +754,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                         >
                           <span className="text-sm font-semibold">{table.label}</span>
                           <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${active ? "bg-white/40" : "bg-white/10"}`}>
-                            {(table.rows as unknown[]).length}
+                            {getSidebarCount(table)}
                           </span>
                         </button>
                       );
@@ -619,13 +817,27 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                 />
               </label>
 
-              <button
-                type="button"
-                onClick={() => openNew(selectedTable)}
-                className="inline-flex h-14 items-center justify-center rounded-full bg-[linear-gradient(180deg,var(--pf-secondary-light)_0%,var(--pf-secondary)_100%)] px-6 text-sm font-black text-slate-900 shadow-[0_14px_30px_rgba(168,109,69,0.22)] transition hover:brightness-105"
-              >
-                {getCreateLabel(selectedTable)}
-              </button>
+              <div className="flex flex-wrap gap-3">
+                {selectedRowIds.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={handleBulkDelete}
+                    className="inline-flex h-14 items-center justify-center rounded-full border border-[rgba(185,79,54,0.24)] bg-[rgba(185,79,54,0.08)] px-6 text-sm font-black text-[var(--pf-wood-muted)] shadow-[0_10px_22px_rgba(58,44,25,0.06)] transition hover:bg-[rgba(185,79,54,0.12)]"
+                  >
+                    Borrar seleccionados ({selectedRowIds.length})
+                  </button>
+                ) : null}
+
+                {selectedTable.key === "products" ? <ExcelImportButton /> : null}
+
+                <button
+                  type="button"
+                  onClick={() => openNew(selectedTable)}
+                  className="inline-flex h-14 items-center justify-center rounded-full bg-[linear-gradient(180deg,var(--pf-secondary-light)_0%,var(--pf-secondary)_100%)] px-6 text-sm font-black text-slate-900 shadow-[0_14px_30px_rgba(168,109,69,0.22)] transition hover:brightness-105"
+                >
+                  {getCreateLabel(selectedTable)}
+                </button>
+              </div>
 
               <Link
                 href="/"
@@ -666,6 +878,32 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                     <table className="min-w-[960px] w-full border-collapse">
                       <thead className="bg-slate-50">
                         <tr>
+                          <th className="border-b border-slate-200 px-4 py-4 text-left text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">
+                            <input
+                              ref={selectAllRef}
+                              type="checkbox"
+                              checked={allVisibleSelected}
+                              onChange={(event) => {
+                                const checked = event.target.checked;
+
+                                setSelectedRowIds((current) => {
+                                  const next = new Set(current);
+
+                                  for (const rowId of visibleRowIds) {
+                                    if (checked) {
+                                      next.add(rowId);
+                                    } else {
+                                      next.delete(rowId);
+                                    }
+                                  }
+
+                                  return Array.from(next);
+                                });
+                              }}
+                              className="h-4 w-4 accent-[var(--pf-primary)]"
+                              aria-label="Seleccionar todos los visibles"
+                            />
+                          </th>
                           {selectedTable.columns.map((column) => (
                             <th
                               key={column.key}
@@ -682,7 +920,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                       <tbody>
                         {visibleRows.map((row) => {
                           const rowId = getRowId(selectedTable, row);
-                          const isSelected = rowId === selectedRowId;
+                          const isSelected = rowId === selectedRowId || selectedRowIdSet.has(rowId);
 
                           return (
                             <tr
@@ -691,6 +929,25 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                                 isSelected ? "bg-[#fff8ec]" : "hover:bg-[#fdf8ef]"
                               }`}
                             >
+                              <td className="px-4 py-4 align-top">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedRowIdSet.has(rowId)}
+                                  onChange={(event) => {
+                                    const checked = event.target.checked;
+
+                                    setSelectedRowIds((current) => {
+                                      if (checked) {
+                                        return current.includes(rowId) ? current : [...current, rowId];
+                                      }
+
+                                      return current.filter((id) => id !== rowId);
+                                    });
+                                  }}
+                                  className="h-4 w-4 accent-[var(--pf-primary)]"
+                                  aria-label={`Seleccionar ${String(row[selectedTable.rowLabelField] ?? rowId)}`}
+                                />
+                              </td>
                               {selectedTable.columns.map((column) => {
                                 const field = fieldMap.get(column.key);
 
@@ -718,23 +975,13 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                                     Editar
                                   </button>
 
-                                  <form
-                                    action={deleteAdminRecord}
-                                    onSubmit={(event) => {
-                                      if (!window.confirm(`Eliminar ${row[selectedTable.rowLabelField] ?? rowId}?`)) {
-                                        event.preventDefault();
-                                      }
-                                    }}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickDelete(selectedTable, row)}
+                                    className="rounded-full border border-[var(--pf-border-soft)] bg-white px-4 py-2 text-xs font-bold text-[var(--pf-wood-muted)] transition hover:bg-[var(--pf-surface-warm)]"
                                   >
-                                    <input type="hidden" name="table" value={selectedTable.key} />
-                                    <input type="hidden" name="id" value={rowId} />
-                                    <button
-                                      type="submit"
-                                      className="rounded-full border border-[var(--pf-border-soft)] bg-white px-4 py-2 text-xs font-bold text-[var(--pf-wood-muted)] transition hover:bg-[var(--pf-surface-warm)]"
-                                    >
-                                      Borrar
-                                    </button>
-                                  </form>
+                                    Borrar
+                                  </button>
                                 </div>
                               </td>
                             </tr>
@@ -749,6 +996,58 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
           </div>
         </section>
       </div>
+
+      {bulkDeleteState?.open ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[28px] border border-[var(--pf-border-soft)] bg-[#fbf8f1] p-6 shadow-[0_32px_120px_rgba(74,57,38,0.3)]">
+            <div className="flex items-start gap-4">
+              <div
+                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border ${
+                  bulkDeleteState.loading
+                    ? "border-[rgba(168,109,69,0.22)] bg-[rgba(168,109,69,0.12)]"
+                    : bulkDeleteState.error
+                      ? "border-[rgba(185,79,54,0.24)] bg-[rgba(185,79,54,0.12)]"
+                      : "border-[rgba(74,57,38,0.14)] bg-white"
+                }`}
+              >
+                {bulkDeleteState.loading ? (
+                  <span className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--pf-primary)] border-t-transparent" />
+                ) : bulkDeleteState.error ? (
+                  <span className="text-lg font-black text-[var(--pf-wood-muted)]">!</span>
+                ) : (
+                  <span className="text-lg font-black text-[var(--pf-primary-darker)]">✓</span>
+                )}
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-black uppercase tracking-[0.32em] text-[var(--pf-secondary)]">Borrado en curso</p>
+                <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-900">
+                  {bulkDeleteState.loading
+                    ? `Eliminando ${bulkDeleteState.count} elementos`
+                    : bulkDeleteState.error
+                      ? "No se pudo borrar"
+                      : "Borrado completado"}
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {bulkDeleteState.loading
+                    ? "Estamos aplicando los cambios y actualizando las relaciones para que no quede nada roto."
+                    : bulkDeleteState.error ?? bulkDeleteState.message ?? "Los elementos ya no se muestran en la grilla."}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setBulkDeleteState(null)}
+                className="rounded-full border border-[var(--pf-border-soft)] bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                {bulkDeleteState.loading ? "Procesando..." : "Cerrar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {editor ? (
         <div
@@ -785,8 +1084,18 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
 
               <div className="grid gap-4 md:grid-cols-2">
                 {selectedTable.fields.map((field) => {
+                  if (field.hidden || field.readonly) {
+                    return null;
+                  }
+
                   const value = editor.draft[field.key];
-                  const fullWidth = field.kind === "textarea" || field.kind === "boolean" || field.kind === "pack_products";
+                  const fullWidth =
+                    field.kind === "textarea" ||
+                    field.kind === "file" ||
+                    field.kind === "select" ||
+                    field.kind === "boolean" ||
+                    field.kind === "pack_products" ||
+                    field.kind === "multiselect";
 
                   if (field.kind === "pack_products") {
                     return (
@@ -809,10 +1118,119 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                                 : current,
                             )
                           }
-                          products={productRows}
+                          products={productSelectionRows as CatalogProductRow[]}
                           search={packSearch}
                           onSearchChange={setPackSearch}
                         />
+                      </div>
+                    );
+                  }
+
+                  if (field.kind === "multiselect") {
+                    const selectedValues = new Set(parseMultiSelectValues(value));
+                    const options = field.options ?? [];
+
+                    return (
+                      <div key={field.key} className={`block ${fullWidth ? "md:col-span-2" : ""}`}>
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <span className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">
+                            {field.label}
+                          </span>
+                          {field.helper ? <span className="text-xs text-slate-500">{field.helper}</span> : null}
+                        </div>
+
+                        {options.length === 0 ? (
+                          <div className="rounded-[22px] border border-dashed border-[var(--pf-border-soft)] bg-white px-4 py-4 text-sm text-slate-500">
+                            No hay categorias visibles para seleccionar.
+                          </div>
+                        ) : (
+                          <div className="space-y-3 rounded-[22px] border border-[var(--pf-border-soft)] bg-white p-4">
+                            <div className="flex flex-wrap gap-2">
+                              {[...selectedValues].map((selectedValue) => {
+                                const option = options.find((item) => item.value === selectedValue);
+
+                                return (
+                                  <span
+                                    key={selectedValue}
+                                    className="inline-flex items-center gap-2 rounded-full border border-[rgba(168,109,69,0.18)] bg-[rgba(168,109,69,0.08)] px-3 py-1 text-xs font-semibold text-[var(--pf-primary-darker)]"
+                                  >
+                                    {option?.label ?? selectedValue}
+                                    <button
+                                      type="button"
+                                      className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-black"
+                                      onClick={() =>
+                                        setEditor((current) =>
+                                          current
+                                            ? {
+                                                ...current,
+                                                draft: {
+                                                  ...current.draft,
+                                                  [field.key]: serializeMultiSelectValues(
+                                                    parseMultiSelectValues(current.draft[field.key]).filter(
+                                                      (item) => item !== selectedValue,
+                                                    ),
+                                                  ),
+                                                },
+                                              }
+                                            : current,
+                                        )
+                                      }
+                                    >
+                                      Quitar
+                                    </button>
+                                  </span>
+                                );
+                              })}
+                            </div>
+
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              {options.map((option) => {
+                                const checked = selectedValues.has(option.value);
+
+                                return (
+                                  <label
+                                    key={option.value}
+                                    className={`flex cursor-pointer items-center justify-between rounded-[18px] border px-4 py-3 transition ${
+                                      checked
+                                        ? "border-[rgba(168,109,69,0.2)] bg-[rgba(168,109,69,0.08)]"
+                                        : "border-[var(--pf-border-soft)] bg-slate-50 hover:bg-white"
+                                    }`}
+                                  >
+                                    <span className="text-sm font-semibold text-slate-700">{option.label}</span>
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={(event) =>
+                                        setEditor((current) =>
+                                          current
+                                            ? {
+                                                ...current,
+                                                draft: {
+                                                  ...current.draft,
+                                                  [field.key]: serializeMultiSelectValues(
+                                                    (() => {
+                                                      const next = new Set(parseMultiSelectValues(current.draft[field.key]));
+                                                      if (event.target.checked) {
+                                                        next.add(option.value);
+                                                      } else {
+                                                        next.delete(option.value);
+                                                      }
+                                                      return [...next];
+                                                    })(),
+                                                  ),
+                                                },
+                                              }
+                                            : current,
+                                        )
+                                      }
+                                      className="h-4 w-4 accent-[var(--pf-primary)]"
+                                    />
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   }
@@ -850,6 +1268,42 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                     );
                   }
 
+                  if (field.kind === "select") {
+                    const options = field.options ?? [];
+
+                    return (
+                      <label key={field.key} className={`block ${fullWidth ? "md:col-span-2" : ""}`}>
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <span className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">
+                            {field.label}
+                          </span>
+                          {field.helper ? <span className="text-xs text-slate-500">{field.helper}</span> : null}
+                        </div>
+                        <select
+                          value={String(value ?? "")}
+                          onChange={(event) =>
+                            setEditor((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    draft: { ...current.draft, [field.key]: event.target.value },
+                                  }
+                                : current,
+                            )
+                          }
+                          className="w-full rounded-[22px] border border-[var(--pf-border-soft)] bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--pf-primary)]"
+                        >
+                          <option value="">Seleccionar...</option>
+                          {options.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    );
+                  }
+
                   if (field.kind === "textarea") {
                     return (
                       <label key={field.key} className={`block ${fullWidth ? "md:col-span-2" : ""}`}>
@@ -879,6 +1333,78 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                     );
                   }
 
+                  if (field.kind === "file") {
+                    const imageValue = typeof value === "string" ? value.trim() : "";
+                    const selectedFileName = fileNames[field.key] ?? "";
+
+                    return (
+                      <div key={field.key} className={`block ${fullWidth ? "md:col-span-2" : ""}`}>
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <span className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-400">
+                            {field.label}
+                          </span>
+                          {field.helper ? <span className="text-xs text-slate-500">{field.helper}</span> : null}
+                        </div>
+
+                        <div className="space-y-3 rounded-[22px] border border-[var(--pf-border-soft)] bg-white p-4">
+                          <label className="flex min-h-20 cursor-pointer items-center justify-between gap-4 rounded-[18px] border border-dashed border-[rgba(168,109,69,0.24)] bg-[rgba(168,109,69,0.05)] px-4 py-4 transition hover:bg-[rgba(168,109,69,0.08)]">
+                            <div className="min-w-0">
+                              <span className="block text-sm font-bold text-[var(--pf-primary-darker)]">
+                                Seleccionar imagen
+                              </span>
+                              <span className="mt-1 block text-xs text-slate-500">
+                                Cargá un archivo para guardarlo dentro del proyecto.
+                              </span>
+                              <span className="mt-2 block truncate text-xs font-semibold text-slate-600">
+                                {selectedFileName || "Ningún archivo seleccionado todavía"}
+                              </span>
+                            </div>
+
+                            <div className="shrink-0 rounded-full bg-[linear-gradient(180deg,var(--pf-secondary-light)_0%,var(--pf-secondary)_100%)] px-4 py-2 text-sm font-black text-slate-900 shadow-[0_10px_24px_rgba(168,109,69,0.18)]">
+                              Buscar archivo
+                            </div>
+
+                            <input
+                              type="file"
+                              name={`${field.key}_file`}
+                              accept="image/*"
+                              className="sr-only"
+                              onChange={(event) =>
+                                setFileNames((current) => ({
+                                  ...current,
+                                  [field.key]: event.target.files?.[0]?.name ?? "",
+                                }))
+                              }
+                            />
+                          </label>
+
+                          {imageValue ? (
+                            <div className="overflow-hidden rounded-[18px] border border-[var(--pf-border-soft)] bg-[#f7f4ee]">
+                              <div className="flex items-center justify-between border-b border-[var(--pf-border-soft)] px-4 py-2">
+                                <span className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">
+                                  Imagen actual
+                                </span>
+                                <span className="truncate text-xs text-slate-500">{imageValue}</span>
+                              </div>
+                              <div className="flex justify-center p-4">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={imageValue}
+                                  alt={field.label}
+                                  className="max-h-48 w-auto rounded-[16px] object-contain"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="rounded-[18px] border border-dashed border-[var(--pf-border-soft)] bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                              Todavía no se subió una imagen para esta promoción.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+
                   return (
                     <label key={field.key} className={`block ${fullWidth ? "md:col-span-2" : ""}`}>
                       <div className="mb-2 flex items-center justify-between gap-3">
@@ -903,8 +1429,13 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                               : current,
                           )
                         }
-                        className="w-full rounded-[22px] border border-[var(--pf-border-soft)] bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[var(--pf-primary)]"
+                        className={`w-full rounded-[22px] border px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-[var(--pf-primary)] ${
+                          field.readonly
+                            ? "border-slate-200 bg-slate-50 text-slate-500"
+                            : "border-[var(--pf-border-soft)] bg-white text-slate-900"
+                        }`}
                         readOnly={field.readonly}
+                        disabled={field.readonly}
                       />
                     </label>
                   );

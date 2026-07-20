@@ -1,5 +1,8 @@
-"use server";
+﻿"use server";
 
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { extname, join } from "node:path";
 import { revalidatePath } from "next/cache";
 import { postgresPool } from "@/infrastructure/db/postgres";
 import { siteContentSchemaSql } from "@/infrastructure/site-content/schema";
@@ -43,6 +46,76 @@ function toStringValue(value: unknown) {
 
 function slugify(value: string) {
   return normalizeText(value).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function parseNumberArray(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((item) => toNumber(item)).filter((item) => Number.isFinite(item) && item > 0);
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => toNumber(item)).filter((item) => Number.isFinite(item) && item > 0);
+      }
+    } catch {
+      return value
+        .split(",")
+        .map((item) => toNumber(item.trim()))
+        .filter((item) => Number.isFinite(item) && item > 0);
+    }
+  }
+
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return [value];
+  }
+
+  return [];
+}
+
+function parseStringArray(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((item) => toStringValue(item)).filter(Boolean);
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => toStringValue(item)).filter(Boolean);
+      }
+    } catch {
+      return value
+        .split(",")
+        .map((item) => toStringValue(item))
+        .filter(Boolean);
+    }
+  }
+
+  return [];
+}
+
+function generateSku(id: number) {
+  return `PF${String(id).padStart(4, "0")}`;
+}
+
+function isFileValue(value: unknown): value is File {
+  return typeof File !== "undefined" && value instanceof File;
+}
+
+async function storeUploadedImage(file: File, scope: string, fallbackName: string) {
+  const extension = extname(file.name || "").toLowerCase() || ".png";
+  const safeName = slugify(fallbackName || file.name || "imagen");
+  const fileName = `${safeName}-${Date.now()}-${randomUUID().slice(0, 8)}${extension}`;
+  const uploadsDir = join(process.cwd(), "public", "uploads", scope);
+  const targetPath = join(uploadsDir, fileName);
+  const relativePath = `/uploads/${scope}/${fileName}`;
+
+  await mkdir(uploadsDir, { recursive: true });
+  await writeFile(targetPath, Buffer.from(await file.arrayBuffer()));
+
+  return relativePath;
 }
 
 type PackItemDraft = {
@@ -94,15 +167,87 @@ async function resolveTextId(table: string, providedId: string, fallbackParts: s
 }
 
 async function saveProduct(record: PayloadRecord) {
-  const id = record.id ? toNumber(record.id) : await nextNumericId("products");
+  const providedId = record.id == null || record.id === "" ? 0 : toNumber(record.id);
+  const existingResult = providedId
+    ? await postgresPool!.query<{
+        sku: string;
+        presentation: string;
+        category_id: number;
+        category_name: string;
+        category_ids: unknown;
+        category_names: unknown;
+        status: string;
+        image: string | null;
+        featured_priority: number | null;
+        trending: boolean | null;
+        stock: number | null;
+        views_count: number | null;
+        sales_count: number | null;
+        description: string | null;
+        source_section: string | null;
+      }>(
+        `select sku, presentation, category_id, category_name, category_ids, category_names, status, image,
+                featured_priority, stock, views_count, sales_count, description, source_section
+         from products
+         where id = $1
+         limit 1`,
+        [providedId],
+      )
+    : null;
+  const existing = existingResult?.rows[0];
+  const id = providedId || (await nextNumericId("products"));
+
+  const selectedCategoryIds = parseNumberArray(record.categoryIds);
+  const existingCategoryIds = parseNumberArray(existing?.category_ids);
+  const existingCategoryNames = parseStringArray(existing?.category_names);
+  const fallbackCategoryIds = existingCategoryIds.length > 0 ? existingCategoryIds : existing?.category_id ? [existing.category_id] : [];
+  const categoryIds = selectedCategoryIds.length > 0 ? selectedCategoryIds : fallbackCategoryIds;
+
+  if (categoryIds.length === 0) {
+    throw new Error("El producto necesita al menos una categoria.");
+  }
+
+  const categoryResult = await postgresPool!.query<{ id: number; name: string }>(
+    `select id, name from categories where id = any($1::int[]) and deleted_at is null order by id`,
+    [categoryIds],
+  );
+  const categoryMap = new Map(categoryResult.rows.map((row) => [row.id, row.name]));
+  const resolvedCategoryNames = categoryIds
+    .map((categoryId) => categoryMap.get(categoryId))
+    .filter((value): value is string => Boolean(value));
+  const categoryNames = resolvedCategoryNames.length > 0 ? resolvedCategoryNames : existingCategoryNames.length > 0 ? existingCategoryNames : [existing?.category_name || ""];
+  const primaryCategoryId = categoryIds[0];
+  const primaryCategoryName = categoryNames[0] || existing?.category_name || "";
+  const sku = toStringValue(record.sku) || existing?.sku || generateSku(id);
+  const name = toStringValue(record.name);
+  const detail = toStringValue(record.detail) || name || sku;
+  const presentation = toStringValue(record.presentation) || existing?.presentation || "";
+  const active =
+    record.active == null || record.active === ""
+      ? String(existing?.status ?? "").toLowerCase() !== "inactive"
+      : toBoolean(record.active);
+  const status = active ? "published" : "inactive";
+  const image = toStringValue(record.image) || existing?.image || null;
+  const featuredPriority =
+    record.featuredPriority == null || record.featuredPriority === ""
+      ? existing?.featured_priority ?? null
+      : toNumber(record.featuredPriority);
+  const stock = record.stock == null || record.stock === "" ? existing?.stock ?? null : toNumber(record.stock);
+  const viewsCount =
+    record.viewsCount == null || record.viewsCount === "" ? existing?.views_count ?? 0 : toNumber(record.viewsCount);
+  const salesCount =
+    record.salesCount == null || record.salesCount === "" ? existing?.sales_count ?? 0 : toNumber(record.salesCount);
+  const description = toStringValue(record.description) || existing?.description || null;
+  const sourceSection = toStringValue(record.sourceSection) || existing?.source_section || null;
+
   await postgresPool!.query(
     `
       insert into products (
-        id, sku, name, detail, presentation, category_id, category_name, brand,
+        id, sku, name, detail, presentation, category_id, category_name, category_ids, category_names, brand,
         vegano, kosher, testeado_en_animales, public_price, member_price, image,
-        status, featured, featured_priority, trending, stock, views_count, sales_count, description, source_section
+        status, featured, featured_priority, stock, views_count, sales_count, description, source_section
       ) values (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22
+        $1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24
       )
       on conflict (id) do update set
         sku = excluded.sku,
@@ -111,6 +256,8 @@ async function saveProduct(record: PayloadRecord) {
         presentation = excluded.presentation,
         category_id = excluded.category_id,
         category_name = excluded.category_name,
+        category_ids = excluded.category_ids,
+        category_names = excluded.category_names,
         brand = excluded.brand,
         vegano = excluded.vegano,
         kosher = excluded.kosher,
@@ -121,7 +268,6 @@ async function saveProduct(record: PayloadRecord) {
         status = excluded.status,
         featured = excluded.featured,
         featured_priority = excluded.featured_priority,
-        trending = excluded.trending,
         stock = excluded.stock,
         views_count = excluded.views_count,
         sales_count = excluded.sales_count,
@@ -131,35 +277,43 @@ async function saveProduct(record: PayloadRecord) {
     `,
     [
       id,
-      toStringValue(record.sku),
-      toStringValue(record.name),
-      toStringValue(record.detail) || toStringValue(record.name) || toStringValue(record.sku),
-      toStringValue(record.presentation),
-      toNumber(record.categoryId),
-      toStringValue(record.categoryName),
+      sku,
+      name,
+      detail,
+      presentation,
+      primaryCategoryId,
+      primaryCategoryName,
+      JSON.stringify(categoryIds),
+      JSON.stringify(categoryNames),
       toStringValue(record.brand),
       toBoolean(record.vegano),
       toBoolean(record.kosher),
       record.testeadoEnAnimales == null ? null : toBoolean(record.testeadoEnAnimales),
       toNumber(record.publicPrice),
       toNumber(record.memberPrice),
-      toStringValue(record.image) || null,
-      toStringValue(record.status) || "published",
+      image,
+      status,
       toBoolean(record.featured),
-      record.featuredPriority == null || record.featuredPriority === "" ? null : toNumber(record.featuredPriority),
-      record.trending == null || record.trending === "" ? null : toBoolean(record.trending),
-      record.stock == null || record.stock === "" ? null : toNumber(record.stock),
-      record.viewsCount == null || record.viewsCount === "" ? 0 : toNumber(record.viewsCount),
-      record.salesCount == null || record.salesCount === "" ? 0 : toNumber(record.salesCount),
-      toStringValue(record.description) || null,
-      toStringValue(record.sourceSection) || null,
+      featuredPriority,
+      stock,
+      viewsCount,
+      salesCount,
+      description,
+      sourceSection,
     ],
   );
 }
 
 async function saveBrand(record: PayloadRecord) {
-  const code = toStringValue(record.code);
-  const id = await resolveTextId("brands", toStringValue(record.id), [toStringValue(record.id), code, toStringValue(record.name)]);
+  const name = toStringValue(record.name);
+  const code = toStringValue(record.code) || slugify(name);
+  const id = await resolveTextId("brands", toStringValue(record.id), [toStringValue(record.id), code, name]);
+  const existingResult = await postgresPool!.query<{ featured: boolean | null }>(
+    "select featured from brands where id = $1 limit 1",
+    [id],
+  );
+  const existing = existingResult.rows[0];
+  const featured = existing?.featured ?? false;
   await postgresPool!.query(
     `
       insert into brands (id, code, name, image, featured)
@@ -170,7 +324,7 @@ async function saveBrand(record: PayloadRecord) {
         image = excluded.image,
         featured = excluded.featured
     `,
-    [id, code || id, toStringValue(record.name), toStringValue(record.image) || null, toBoolean(record.featured)],
+    [id, code || id, name, toStringValue(record.image) || null, featured],
   );
 }
 
@@ -191,6 +345,18 @@ async function saveCategory(record: PayloadRecord) {
 
 async function saveUser(record: PayloadRecord) {
   const id = record.id ? toNumber(record.id) : await nextNumericId("users");
+  const rawRole = toStringValue(record.role);
+  const normalizedRole = (() => {
+    const value = rawRole.toLowerCase();
+    if (value === "admin" || value === "administrador") {
+      return "Administrador";
+    }
+    if (value === "customer" || value === "client" || value === "cliente") {
+      return "Cliente";
+    }
+    return rawRole || "Cliente";
+  })();
+
   await postgresPool!.query(
     `
       insert into users (id, name, email, role, can_see_prices, active)
@@ -206,7 +372,7 @@ async function saveUser(record: PayloadRecord) {
       id,
       toStringValue(record.name),
       toStringValue(record.email),
-      toStringValue(record.role) || "customer",
+      normalizedRole,
       toBoolean(record.canSeePrices),
       toBoolean(record.active),
     ],
@@ -297,7 +463,7 @@ function parsePackItems(value: unknown): PackItemDraft[] {
   }
 }
 
-async function savePack(record: PayloadRecord) {
+async function savePack(record: PayloadRecord, formData: FormData) {
   const client = await postgresPool!.connect();
 
   try {
@@ -307,13 +473,14 @@ async function savePack(record: PayloadRecord) {
     const title = toStringValue(record.title);
     const apodo = toStringValue(record.apodo) || slugify(title);
     const items = parsePackItems(record.items_json);
+    const uploadedImage = formData.get("image_file");
+    const image =
+      isFileValue(uploadedImage) && uploadedImage.size > 0
+        ? await storeUploadedImage(uploadedImage, "promociones", title || apodo || `promocion-${id}`)
+        : toStringValue(record.image) || null;
 
     if (!title) {
       throw new Error("El pack necesita un título.");
-    }
-
-    if (!apodo) {
-      throw new Error("El pack necesita un apodo.");
     }
 
     if (toNumber(record.publicPrice) <= 0) {
@@ -322,6 +489,10 @@ async function savePack(record: PayloadRecord) {
 
     if (items.length === 0) {
       throw new Error("El pack debe incluir al menos un producto.");
+    }
+
+    if (!image) {
+      throw new Error("La promoción necesita una imagen.");
     }
 
     await client.query(
@@ -348,7 +519,7 @@ async function savePack(record: PayloadRecord) {
         toStringValue(record.description),
         toStringValue(record.category),
         toNumber(record.publicPrice),
-        toStringValue(record.image) || null,
+        image,
         toBoolean(record.active),
         toBoolean(record.featured),
         toNumber(record.order),
@@ -474,7 +645,7 @@ async function saveMeta(record: PayloadRecord) {
   );
 }
 
-async function saveRow(table: AdminTableKey, record: PayloadRecord) {
+async function saveRow(table: AdminTableKey, record: PayloadRecord, formData: FormData) {
   switch (table) {
     case "products":
       return saveProduct(record);
@@ -489,7 +660,7 @@ async function saveRow(table: AdminTableKey, record: PayloadRecord) {
     case "banners":
       return saveBanner(record);
     case "packs":
-      return savePack(record);
+      return savePack(record, formData);
     case "header_search_scopes":
       return saveSearchScope(record);
     case "header_sections":
@@ -548,6 +719,26 @@ async function deleteRow(table: AdminTableKey, id: string) {
   }
 }
 
+function getIdsPayload(formData: FormData) {
+  const raw = formData.get("ids_json");
+
+  if (typeof raw !== "string" || !raw.trim()) {
+    return [] as string[];
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.map((item) => String(item)).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 function refreshAdminViews() {
   revalidatePath("/admin");
   revalidatePath("/");
@@ -567,7 +758,7 @@ export async function saveAdminRecord(formData: FormData) {
     throw new Error("Falta la tabla.");
   }
 
-  await saveRow(table, payload);
+  await saveRow(table, payload, formData);
   refreshAdminViews();
 }
 
@@ -582,5 +773,22 @@ export async function deleteAdminRecord(formData: FormData) {
   }
 
   await deleteRow(table, id);
+  refreshAdminViews();
+}
+
+export async function deleteAdminRecords(formData: FormData) {
+  await ensureDatabase();
+
+  const table = String(formData.get("table") || "") as AdminTableKey;
+  const ids = getIdsPayload(formData);
+
+  if (!table || ids.length === 0) {
+    throw new Error("Falta la tabla o los ids.");
+  }
+
+  for (const id of ids) {
+    await deleteRow(table, id);
+  }
+
   refreshAdminViews();
 }

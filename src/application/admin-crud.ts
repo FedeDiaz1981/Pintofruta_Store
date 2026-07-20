@@ -1,5 +1,5 @@
-import type { AdminOverview } from "@/application/admin";
-import type { SiteContentDocument } from "@/domain/site-content";
+﻿import type { AdminOverview } from "@/application/admin";
+import type { ProductItem, SiteContentDocument } from "@/domain/site-content";
 
 export type AdminTableKey =
   | "site_content_meta"
@@ -15,7 +15,12 @@ export type AdminTableKey =
   | "users"
   | "products";
 
-export type AdminFieldKind = "text" | "number" | "boolean" | "textarea" | "pack_products";
+export type AdminFieldKind = "text" | "number" | "boolean" | "textarea" | "pack_products" | "multiselect" | "file" | "select";
+
+export interface AdminFieldOption {
+  value: string;
+  label: string;
+}
 
 export interface AdminFieldDefinition {
   key: string;
@@ -23,7 +28,9 @@ export interface AdminFieldDefinition {
   kind: AdminFieldKind;
   required?: boolean;
   readonly?: boolean;
+  hidden?: boolean;
   helper?: string;
+  options?: AdminFieldOption[];
 }
 
 export interface AdminTableDefinition {
@@ -43,6 +50,7 @@ export interface AdminTableDefinition {
 export interface AdminCrudViewModel {
   overview: AdminOverview;
   tables: AdminTableDefinition[];
+  productSelectionRows: ProductItem[];
 }
 
 const tableOrder: AdminTableKey[] = [
@@ -53,15 +61,21 @@ const tableOrder: AdminTableKey[] = [
   "users",
   "hero_slides",
   "banners",
-  "site_content_meta",
 ];
 
-function booleanField(key: string, label: string, helper?: string): AdminFieldDefinition {
-  return { key, label, kind: "boolean", helper };
+function booleanField(key: string, label: string, helper?: string, hidden = false): AdminFieldDefinition {
+  return { key, label, kind: "boolean", helper, hidden };
 }
 
-function textField(key: string, label: string, required = false, helper?: string): AdminFieldDefinition {
-  return { key, label, kind: "text", required, helper };
+function textField(
+  key: string,
+  label: string,
+  required = false,
+  helper?: string,
+  readonly = false,
+  hidden = false,
+): AdminFieldDefinition {
+  return { key, label, kind: "text", required, helper, readonly, hidden };
 }
 
 function numberField(
@@ -70,16 +84,43 @@ function numberField(
   required = false,
   helper?: string,
   readonly = false,
+  hidden = false,
 ): AdminFieldDefinition {
-  return { key, label, kind: "number", required, helper, readonly };
+  return { key, label, kind: "number", required, helper, readonly, hidden };
 }
 
-function textareaField(key: string, label: string, required = false, helper?: string): AdminFieldDefinition {
-  return { key, label, kind: "textarea", required, helper };
+function textareaField(key: string, label: string, required = false, helper?: string, hidden = false): AdminFieldDefinition {
+  return { key, label, kind: "textarea", required, helper, hidden };
+}
+
+function fileField(key: string, label: string, required = false, helper?: string, hidden = false): AdminFieldDefinition {
+  return { key, label, kind: "file", required, helper, hidden };
+}
+
+function selectField(
+  key: string,
+  label: string,
+  options: AdminFieldOption[],
+  required = false,
+  helper?: string,
+  readonly = false,
+  hidden = false,
+): AdminFieldDefinition {
+  return { key, label, kind: "select", required, helper, readonly, hidden, options };
 }
 
 function packProductsField(key: string, label: string, helper?: string): AdminFieldDefinition {
   return { key, label, kind: "pack_products", helper };
+}
+
+function multiselectField(
+  key: string,
+  label: string,
+  options: AdminFieldOption[],
+  helper?: string,
+  hidden = false,
+): AdminFieldDefinition {
+  return { key, label, kind: "multiselect", helper, hidden, options };
 }
 
 export function getAdminTableDefinitions(content: SiteContentDocument): AdminTableDefinition[] {
@@ -94,6 +135,13 @@ export function getAdminTableDefinitions(content: SiteContentDocument): AdminTab
       })),
     ),
   }));
+  const visibleCategoryOptions = (content.categories ?? [])
+    .filter((category) => category.visible)
+    .sort((left, right) => left.name.localeCompare(right.name, "es", { sensitivity: "base" }))
+    .map((category) => ({
+      value: String(category.id),
+      label: category.name,
+    }));
 
   return [
     {
@@ -102,7 +150,10 @@ export function getAdminTableDefinitions(content: SiteContentDocument): AdminTab
       description: "Catalogo principal de productos y precios.",
       idField: "id",
       rowLabelField: "name",
-      rows: content.products,
+      rows: (content.products ?? []).map((product) => ({
+        ...product,
+        active: String(product.status ?? "").toLowerCase() !== "inactive",
+      })),
       columns: [
         { key: "id", label: "ID" },
         { key: "sku", label: "SKU" },
@@ -111,33 +162,32 @@ export function getAdminTableDefinitions(content: SiteContentDocument): AdminTab
         { key: "publicPrice", label: "Precio" },
         { key: "featuredPriority", label: "Prioridad" },
         { key: "featured", label: "Destacado" },
+        { key: "active", label: "Activo" },
         { key: "viewsCount", label: "Vistas" },
         { key: "salesCount", label: "Ventas" },
       ],
       fields: [
-        numberField("id", "ID", true, "Se usa al editar. En alta se calcula solo."),
-        textField("sku", "SKU", true),
+        numberField("id", "ID", true, "Uso interno", true, true),
+        textField("sku", "SKU", true, "Uso interno", true, true),
         textField("name", "Nombre", true),
         textareaField("detail", "Detalle", true),
-        textField("presentation", "Presentacion", true),
-        numberField("categoryId", "ID de categoría", true),
-        textField("categoryName", "Nombre de categoría", true),
+        multiselectField("categoryIds", "Categorias", visibleCategoryOptions, "Elegi una o mas categorias visibles."),
         textField("brand", "Marca", true),
-        booleanField("vegano", "Vegano"),
-        booleanField("kosher", "Kosher"),
-        booleanField("testeadoEnAnimales", "Testeado en animales"),
         numberField("publicPrice", "Precio publico", true),
         numberField("memberPrice", "Precio miembro", true),
-        textField("image", "Imagen"),
-        textField("status", "Estado", true),
+        fileField("image", "Imagen", false, "Subí una imagen de portada para la promoción."),
+        textField("presentation", "Presentacion", true, "Uso interno", true, true),
+        textField("status", "Estado", true, "Uso interno", true, true),
         booleanField("featured", "Destacado"),
         numberField("featuredPriority", "Prioridad destacada", false, "Más bajo = antes en el carrusel."),
-        booleanField("trending", "Tendencia"),
-        numberField("stock", "Stock"),
-        numberField("viewsCount", "Vistas", false, "Se actualiza cuando se abre el detalle.", true),
-        numberField("salesCount", "Ventas", false, "Reservado para ventas confirmadas.", true),
-        textareaField("description", "Descripcion"),
-        textField("sourceSection", "Seccion origen"),
+        booleanField("active", "Activo"),
+        numberField("categoryId", "ID de categoría", true, "Uso interno", true, true),
+        textField("categoryName", "Nombre de categoría", true, "Uso interno", true, true),
+        numberField("stock", "Stock", false, "Uso interno", true, true),
+        numberField("viewsCount", "Vistas", false, "Uso interno", true, true),
+        numberField("salesCount", "Ventas", false, "Uso interno", true, true),
+        textareaField("description", "Descripcion", false, "Uso interno", true),
+        textField("sourceSection", "Seccion origen", false, "Uso interno", true, true),
       ],
     },
     {
@@ -151,14 +201,14 @@ export function getAdminTableDefinitions(content: SiteContentDocument): AdminTab
         { key: "id", label: "ID" },
         { key: "code", label: "Codigo" },
         { key: "name", label: "Nombre" },
-        { key: "featured", label: "Destacada" },
+        { key: "active", label: "Activa" },
       ],
       fields: [
-        textField("id", "ID", true),
-        textField("code", "Codigo", true),
+        textField("id", "ID", true, "Se genera automaticamente.", true),
+        textField("code", "Codigo", true, "Se genera automaticamente.", true, true),
         textField("name", "Nombre", true),
-        textField("image", "Imagen"),
-        booleanField("featured", "Destacada"),
+        fileField("image", "Imagen", false, "Subí el logo o imagen de la marca."),
+        booleanField("active", "Activa"),
       ],
     },
     {
@@ -175,9 +225,9 @@ export function getAdminTableDefinitions(content: SiteContentDocument): AdminTab
         { key: "visible", label: "Visible" },
       ],
       fields: [
-        numberField("id", "ID", true),
+        numberField("id", "ID", true, "Se genera automaticamente.", true),
         textField("name", "Nombre", true),
-        textField("slug", "Slug", true),
+        textField("slug", "Slug", true, "Se genera automaticamente.", true),
         booleanField("visible", "Visible"),
       ],
     },
@@ -196,10 +246,18 @@ export function getAdminTableDefinitions(content: SiteContentDocument): AdminTab
         { key: "active", label: "Activo" },
       ],
       fields: [
-        numberField("id", "ID", true),
+        numberField("id", "ID", true, "Se genera automaticamente.", true, true),
         textField("name", "Nombre", true),
         textField("email", "Correo", true),
-        textField("role", "Rol", true),
+        selectField(
+          "role",
+          "Rol",
+          [
+            { value: "Administrador", label: "Administrador" },
+            { value: "Cliente", label: "Cliente" },
+          ],
+          true,
+        ),
         booleanField("canSeePrices", "Ve precios"),
         booleanField("active", "Activo"),
       ],
@@ -267,13 +325,13 @@ export function getAdminTableDefinitions(content: SiteContentDocument): AdminTab
         { key: "active", label: "Activo" },
       ],
       fields: [
-        numberField("id", "ID", true, "Se usa al editar. En alta se calcula solo."),
-        textField("apodo", "Apodo", true, "Identificador amigable para el equipo."),
+        numberField("id", "ID", true, "Se usa al editar. En alta se calcula solo.", true, true),
+        textField("apodo", "Apodo", true, "Identificador amigable para el equipo.", true, true),
         textField("title", "Título", true),
         textareaField("description", "Descripción", true),
         textField("category", "Categoría", true),
         numberField("publicPrice", "Precio final", true),
-        textField("image", "Imagen"),
+        fileField("image", "Imagen", false, "Subí una imagen de portada para la promoción."),
         booleanField("active", "Activo"),
         booleanField("featured", "Destacado"),
         numberField("order", "Orden"),
@@ -375,40 +433,6 @@ export function getAdminTableDefinitions(content: SiteContentDocument): AdminTab
         textField("href", "Enlace", true),
       ],
     },
-    {
-      key: "site_content_meta",
-      label: "Registro",
-      description: "Valores globales del documento de contenido.",
-      idField: "id",
-      rowLabelField: "sessionRole",
-      rows: [
-        {
-          id: 1,
-          session_role: content.sessionRole ?? "",
-          view_mode: content.viewMode ?? "",
-          active_admin_panel: content.activeAdminPanel ?? "",
-          panel_search_query: content.panelSearchQuery ?? "",
-          active_modal_action: content.activeModalAction ?? "",
-          ping: content.ping ?? false,
-          next_ids: JSON.stringify(content.nextIds ?? {}),
-        },
-      ],
-      columns: [
-        { key: "id", label: "ID" },
-        { key: "session_role", label: "Rol de sesion" },
-        { key: "view_mode", label: "Modo de vista" },
-      ],
-      fields: [
-        numberField("id", "ID", true, "Siempre 1"),
-        textField("session_role", "Rol de sesion"),
-        textField("view_mode", "Modo de vista"),
-        textField("active_admin_panel", "Panel activo"),
-        textField("panel_search_query", "Busqueda"),
-        textField("active_modal_action", "Modal"),
-        booleanField("ping", "Ping"),
-        textareaField("next_ids", "Next IDs JSON"),
-      ],
-    },
   ];
 }
 
@@ -421,9 +445,14 @@ export function buildAdminCrudViewModel(content: SiteContentDocument, overview: 
   const orderedTables = tableOrder
     .map((key) => tables.find((table) => table.key === key))
     .filter((table): table is AdminTableDefinition => Boolean(table));
+  const productSelectionRows = [...(content.products ?? [])]
+    .filter((product) => String(product.status ?? "").toLowerCase() !== "inactive")
+    .sort((left, right) => left.name.localeCompare(right.name, "es", { sensitivity: "base" }));
 
   return {
     overview,
     tables: orderedTables,
+    productSelectionRows,
   };
 }
+
