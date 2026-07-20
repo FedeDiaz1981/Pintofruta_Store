@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Minus, Plus, X } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useCart } from "@/components/cart/cart-context";
@@ -13,6 +14,7 @@ export function CartPanel({
   mode?: "drawer" | "page";
 }) {
   const { items, hydrated, isOpen, closeCart, updateQuantity, removeItem, clearCart, totalItems, totalPrice } = useCart();
+  const router = useRouter();
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const handleConfirmPedido = useCallback(async () => {
@@ -210,7 +212,17 @@ export function CartPanel({
       <main className={containerClass}>
         <div className="grid flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_460px]">
           <section className="rounded-[2rem] border border-[var(--pf-border-warm)] bg-[linear-gradient(180deg,var(--pf-surface-warm)_0%,var(--pf-sand-soft)_58%,var(--pf-surface-strong)_100%)] p-4 shadow-sm sm:p-5">
-            <h1 className="mb-4 text-3xl font-black tracking-tight text-[var(--pf-text)] sm:text-4xl">Mi pedido</h1>
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <h1 className="text-3xl font-black tracking-tight text-[var(--pf-text)] sm:text-4xl">Mi pedido</h1>
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--pf-border)] bg-[rgba(255,255,255,0.82)] text-[var(--pf-text)] transition hover:bg-[rgba(248,242,232,0.92)] lg:hidden"
+                aria-label="Cerrar carrito"
+                onClick={() => router.back()}
+              >
+                <X className="size-5" />
+              </button>
+            </div>
           </section>
           {panel}
         </div>

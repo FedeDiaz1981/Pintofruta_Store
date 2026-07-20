@@ -1,8 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Search, ShoppingCart, UserRound } from "lucide-react";
+import { Search, UserRound } from "lucide-react";
 import { getDynamicHeaderMenus } from "@/application/catalog";
 import { CartButton } from "@/components/cart/cart-button";
+import { MobileCartButton } from "@/components/cart/mobile-cart-button";
 import { publicAsset } from "@/lib/catalog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,13 +60,6 @@ async function SiteHeaderContent() {
             <Button type="button" variant="secondary" size="icon" aria-label="Cuenta">
               <UserRound className="size-4" />
             </Button>
-            <Link
-              href="/carrito"
-              className={`${buttonVariants({ variant: "secondary", size: "icon" })} lg:hidden`}
-              aria-label="Carrito"
-            >
-              <ShoppingCart className="size-4" />
-            </Link>
             <div className="hidden lg:block">
               <CartButton />
             </div>
@@ -95,13 +89,7 @@ async function SiteHeaderContent() {
               <Button type="button" variant="secondary" size="icon" aria-label="Cuenta">
                 <UserRound className="size-4" />
               </Button>
-              <Link
-                href="/carrito"
-                className={`${buttonVariants({ variant: "secondary", size: "icon" })}`}
-                aria-label="Carrito"
-              >
-                <ShoppingCart className="size-4" />
-              </Link>
+              <MobileCartButton />
               <MobileHeaderDrawer menus={menus} />
             </div>
           </div>
