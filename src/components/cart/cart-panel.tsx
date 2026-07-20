@@ -65,7 +65,6 @@ export function CartPanel({
       <aside className="flex h-full w-full max-w-[460px] flex-col border-l border-[var(--pf-border-warm)] bg-[linear-gradient(180deg,var(--pf-surface-warm)_0%,var(--pf-sand-soft)_44%,var(--pf-cream-soft)_100%)] shadow-[0_24px_80px_rgba(74,57,38,0.26)]">
         <div className="flex items-center justify-between border-b border-[rgba(168,109,69,0.16)] px-5 py-4">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-[var(--pf-secondary-dark)]">Pedido demo</p>
             <h2 className="mt-1 text-2xl font-black tracking-tight text-[var(--pf-text)]">Mi pedido</h2>
           </div>
           {mode === "drawer" ? (
@@ -99,9 +98,6 @@ export function CartPanel({
           ) : items.length === 0 ? (
             <div className="rounded-[1.35rem] border border-[var(--pf-border)] bg-[rgba(255,255,255,0.8)] p-5">
               <p className="text-lg font-bold text-[var(--pf-text)]">Tu pedido está vacío</p>
-              <p className="mt-2 text-sm leading-6 text-[var(--pf-muted)]">
-                Agregá productos desde la galería o desde el detalle de cada producto.
-              </p>
               <div className="mt-4">
                 <Link href="/galeria" className={buttonVariants({ variant: "primary", size: "md" })}>
                   Ir a la galería
@@ -176,10 +172,8 @@ export function CartPanel({
         <div className="border-t border-[rgba(168,109,69,0.16)] px-5 py-4">
           <div className="rounded-[1.35rem] border border-[var(--pf-border)] bg-[rgba(255,255,255,0.85)] p-4">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm text-[var(--pf-muted)]">Total estimado</p>
               <p className="text-2xl font-black text-[var(--pf-text)]">{formatCurrency(totalPrice)}</p>
             </div>
-            <p className="mt-2 text-sm text-[var(--pf-muted)]">Podés ajustar cantidades antes de enviar el pedido.</p>
           </div>
 
           <div className="mt-4 grid gap-3">
@@ -216,13 +210,7 @@ export function CartPanel({
       <main className={containerClass}>
         <div className="grid flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_460px]">
           <section className="rounded-[2rem] border border-[var(--pf-border-warm)] bg-[linear-gradient(180deg,var(--pf-surface-warm)_0%,var(--pf-sand-soft)_58%,var(--pf-surface-strong)_100%)] p-4 shadow-sm sm:p-5">
-            <div className="mb-4">
-              <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-[var(--pf-secondary-dark)]">Pedido demo</p>
-              <h1 className="mt-2 text-3xl font-black tracking-tight text-[var(--pf-text)] sm:text-4xl">Mi pedido</h1>
-            </div>
-            <div className="rounded-[1.35rem] border border-[var(--pf-border)] bg-[rgba(255,255,255,0.8)] p-5 text-sm leading-7 text-[var(--pf-muted)]">
-              El carrito ahora se abre como panel lateral en desktop. Esta página queda como respaldo para acceso directo o móvil.
-            </div>
+            <h1 className="mb-4 text-3xl font-black tracking-tight text-[var(--pf-text)] sm:text-4xl">Mi pedido</h1>
           </section>
           {panel}
         </div>

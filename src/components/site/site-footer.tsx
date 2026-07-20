@@ -15,9 +15,6 @@ export function SiteFooter() {
               className="h-auto w-[150px] sm:w-[180px]"
             />
           </div>
-          <p className="mt-4 max-w-md text-sm leading-7 text-[#f8f1e7]/80">
-            Base dinámica con una dirección visual cálida, flexible y coherente con la maqueta original.
-          </p>
         </div>
 
         <div>
