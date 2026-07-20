@@ -225,7 +225,7 @@ async function GalleryPageContent({ searchParams }: { searchParams: Promise<Gall
   return (
     <main className="pf-shell flex w-full flex-1 flex-col gap-8 px-4 py-6 sm:px-6 lg:px-12 lg:py-10">
       <div className="grid gap-6 lg:grid-cols-[290px_minmax(0,1fr)]">
-        <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+        <aside className="hidden space-y-4 lg:sticky lg:top-6 lg:block lg:self-start">
           <section className="rounded-[1.8rem] border border-[var(--pf-border-warm)] bg-[linear-gradient(180deg,var(--pf-surface-warm)_0%,var(--pf-sand-soft)_58%,var(--pf-surface-strong)_100%)] p-4 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -322,6 +322,116 @@ async function GalleryPageContent({ searchParams }: { searchParams: Promise<Gall
         </aside>
 
         <section className="space-y-4">
+          <details className="rounded-[1.8rem] border border-[var(--pf-border-warm)] bg-[linear-gradient(180deg,var(--pf-surface-warm)_0%,var(--pf-sand-soft)_58%,var(--pf-surface-strong)_100%)] p-4 shadow-sm lg:hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[var(--pf-text)]">
+              <span>
+                <span className="block text-[11px] font-bold uppercase tracking-[0.28em] text-[var(--pf-primary-darker)]">
+                  Filtros
+                </span>
+                <span className="mt-1 block text-sm text-[var(--pf-muted)]">Marca y categoría</span>
+              </span>
+              <span className="rounded-full border border-[rgba(168,109,69,0.18)] bg-[rgba(255,255,255,0.78)] px-3 py-1 text-xs font-semibold text-[var(--pf-primary-darker)]">
+                Abrir
+              </span>
+            </summary>
+
+            <div className="mt-4 grid gap-4">
+              <section className="rounded-[1.5rem] border border-[var(--pf-border-soft)] bg-[rgba(255,255,255,0.72)] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-[var(--pf-primary-darker)]">Marca</p>
+                    <p className="mt-1 text-sm text-[var(--pf-muted)]">Elegí una sola marca</p>
+                  </div>
+                  {brand ? (
+                    <Link href={buildHref({ brand: "" })} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+                      Quitar
+                    </Link>
+                  ) : null}
+                </div>
+                <div className="mt-4 max-h-[240px] space-y-2 overflow-auto pr-1">
+                  <Link
+                    href={buildHref({ brand: "" })}
+                    className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-sm transition ${
+                      !brand
+                        ? "border-[rgba(168,109,69,0.22)] bg-[rgba(168,109,69,0.10)] font-semibold text-[var(--pf-primary-darker)]"
+                        : "border-[var(--pf-border-soft)] bg-[rgba(255,255,255,0.72)] text-[var(--pf-text)] hover:bg-[rgba(248,242,232,0.75)]"
+                    }`}
+                  >
+                    <span>Todas las marcas</span>
+                    <span className="text-xs text-[var(--pf-muted)]">{gallery.totalProducts}</span>
+                  </Link>
+                  {gallery.brands.map((item) => {
+                    const active = item.value === brand;
+
+                    return (
+                      <Link
+                        key={item.value}
+                        href={buildHref({ brand: active ? "" : item.value })}
+                        className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-sm transition ${
+                          active
+                            ? "border-[rgba(168,109,69,0.22)] bg-[rgba(168,109,69,0.10)] font-semibold text-[var(--pf-primary-darker)]"
+                            : "border-[var(--pf-border-soft)] bg-[rgba(255,255,255,0.72)] text-[var(--pf-text)] hover:bg-[rgba(248,242,232,0.75)]"
+                        }`}
+                      >
+                        <span className="line-clamp-1">{item.label}</span>
+                        <span className="rounded-full bg-[rgba(168,109,69,0.10)] px-2.5 py-1 text-xs font-semibold text-[var(--pf-primary-darker)]">
+                          {item.count}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className="rounded-[1.5rem] border border-[var(--pf-border-soft)] bg-[rgba(255,255,255,0.72)] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-[var(--pf-primary-darker)]">Categoría</p>
+                    <p className="mt-1 text-sm text-[var(--pf-muted)]">Elegí una sola categoría</p>
+                  </div>
+                  {category ? (
+                    <Link href={buildHref({ category: "" })} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+                      Quitar
+                    </Link>
+                  ) : null}
+                </div>
+                <div className="mt-4 max-h-[240px] space-y-2 overflow-auto pr-1">
+                  <Link
+                    href={buildHref({ category: "" })}
+                    className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-sm transition ${
+                      !category
+                        ? "border-[rgba(168,109,69,0.22)] bg-[rgba(168,109,69,0.10)] font-semibold text-[var(--pf-primary-darker)]"
+                        : "border-[var(--pf-border-soft)] bg-[rgba(255,255,255,0.72)] text-[var(--pf-text)] hover:bg-[rgba(248,242,232,0.75)]"
+                    }`}
+                  >
+                    <span>Todas las categorías</span>
+                    <span className="text-xs text-[var(--pf-muted)]">{gallery.totalProducts}</span>
+                  </Link>
+                  {gallery.categories.map((item) => {
+                    const active = item.value === category;
+
+                    return (
+                      <Link
+                        key={item.value}
+                        href={buildHref({ category: active ? "" : item.value })}
+                        className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-sm transition ${
+                          active
+                            ? "border-[rgba(168,109,69,0.22)] bg-[rgba(168,109,69,0.10)] font-semibold text-[var(--pf-primary-darker)]"
+                            : "border-[var(--pf-border-soft)] bg-[rgba(255,255,255,0.72)] text-[var(--pf-text)] hover:bg-[rgba(248,242,232,0.75)]"
+                        }`}
+                      >
+                        <span className="line-clamp-1">{item.label}</span>
+                        <span className="rounded-full bg-[rgba(168,109,69,0.10)] px-2.5 py-1 text-xs font-semibold text-[var(--pf-primary-darker)]">
+                          {item.count}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+          </details>
+
           <div className="rounded-[2rem] border border-[var(--pf-border-warm)] bg-[linear-gradient(180deg,var(--pf-surface-warm)_0%,var(--pf-sand-soft)_58%,var(--pf-surface-strong)_100%)] p-4 shadow-sm sm:p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
