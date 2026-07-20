@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { Inter, Manrope } from "next/font/google";
 import { CartProvider } from "@/components/cart/cart-context";
 import { FloatingCartButton } from "@/components/cart/floating-cart-button";
@@ -8,6 +9,10 @@ import { SiteFooter } from "@/components/site/site-footer";
 import { SiteHeader } from "@/components/site/site-header";
 import { getActiveSiteBanners } from "@/application/catalog";
 import "./globals.css";
+
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+export const revalidate = 0;
 
 const inter = Inter({
   variable: "--font-inter",
@@ -31,6 +36,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  await connection();
   const banners = await getActiveSiteBanners();
 
   return (
