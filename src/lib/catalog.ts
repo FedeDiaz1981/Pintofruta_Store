@@ -3,6 +3,10 @@ export function publicAsset(path: string | undefined | null, fallback = "/assets
     return fallback;
   }
 
+  if (path.startsWith("data:") || path.startsWith("http://") || path.startsWith("https://")) {
+    return path;
+  }
+
   return path.startsWith("/") ? path : `/${path}`;
 }
 

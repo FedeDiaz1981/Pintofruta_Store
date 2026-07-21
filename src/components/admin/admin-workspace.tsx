@@ -1353,7 +1353,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                                 Seleccionar imagen
                               </span>
                               <span className="mt-1 block text-xs text-slate-500">
-                                Cargá un archivo para guardarlo dentro del proyecto.
+                                Cargá un archivo para subirlo al sitio.
                               </span>
                               <span className="mt-2 block truncate text-xs font-semibold text-slate-600">
                                 {selectedFileName || "Ningún archivo seleccionado todavía"}

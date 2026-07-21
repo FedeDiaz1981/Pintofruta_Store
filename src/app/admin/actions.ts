@@ -111,11 +111,18 @@ async function storeUploadedImage(file: File, scope: string, fallbackName: strin
   const uploadsDir = join(process.cwd(), "public", "uploads", scope);
   const targetPath = join(uploadsDir, fileName);
   const relativePath = `/uploads/${scope}/${fileName}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
 
-  await mkdir(uploadsDir, { recursive: true });
-  await writeFile(targetPath, Buffer.from(await file.arrayBuffer()));
+  try {
+    await mkdir(uploadsDir, { recursive: true });
+    await writeFile(targetPath, buffer);
+    return relativePath;
+  } catch (error) {
+    console.warn(`No se pudo guardar la imagen en disco para ${scope}; se usará base64 embebido.`, error);
+  }
 
-  return relativePath;
+  const mimeType = file.type || "image/png";
+  return `data:${mimeType};base64,${buffer.toString("base64")}`;
 }
 
 type PackItemDraft = {
