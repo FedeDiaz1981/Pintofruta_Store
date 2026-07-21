@@ -4,6 +4,10 @@ import { Pool, type PoolConfig } from "pg";
 const databaseUrl = process.env.DATABASE_URL;
 const isRemotePostgres = Boolean(databaseUrl && /supabase\.co|render\.com/i.test(databaseUrl));
 
+if (isRemotePostgres) {
+  dns.setDefaultResultOrder("ipv4first");
+}
+
 let poolPromise: Promise<Pool> | null = null;
 
 function buildPoolConfig(url: URL, host: string): PoolConfig {
@@ -33,8 +37,7 @@ async function getPool() {
 
   if (!poolPromise) {
     const url = new URL(databaseUrl);
-    const host = isRemotePostgres ? (await dns.promises.lookup(url.hostname, { family: 4 })).address : url.hostname;
-    poolPromise = Promise.resolve(new Pool(buildPoolConfig(url, host)));
+    poolPromise = Promise.resolve(new Pool(buildPoolConfig(url, url.hostname)));
   }
 
   return poolPromise;
