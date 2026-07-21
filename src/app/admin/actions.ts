@@ -104,11 +104,15 @@ function isFileValue(value: unknown): value is File {
   return typeof File !== "undefined" && value instanceof File;
 }
 
+function getUploadsBaseDir() {
+  return process.env.UPLOADS_DIR || join(process.cwd(), "public", "uploads");
+}
+
 async function storeUploadedImage(file: File, scope: string, fallbackName: string) {
   const extension = extname(file.name || "").toLowerCase() || ".png";
   const safeName = slugify(fallbackName || file.name || "imagen");
   const fileName = `${safeName}-${Date.now()}-${randomUUID().slice(0, 8)}${extension}`;
-  const uploadsDir = join(process.cwd(), "public", "uploads", scope);
+  const uploadsDir = join(getUploadsBaseDir(), scope);
   const targetPath = join(uploadsDir, fileName);
   const relativePath = `/uploads/${scope}/${fileName}`;
   const buffer = Buffer.from(await file.arrayBuffer());
