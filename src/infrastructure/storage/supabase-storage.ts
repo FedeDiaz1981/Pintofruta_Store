@@ -38,6 +38,34 @@ function getSupabaseClient() {
   return supabaseClient;
 }
 
+async function ensurePublicBucket(bucket: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.storage.getBucket(bucket);
+
+  if (!error && data) {
+    if (data.public) {
+      return supabase;
+    }
+
+    const { error: updateError } = await supabase.storage.updateBucket(bucket, { public: true });
+    if (updateError) {
+      throw updateError;
+    }
+
+    return supabase;
+  }
+
+  const { error: createError } = await supabase.storage.createBucket(bucket, {
+    public: true,
+  });
+
+  if (createError) {
+    throw createError;
+  }
+
+  return supabase;
+}
+
 export async function storeImageOnSupabase(file: File, scope: string, fallbackName: string, adminLog?: (stage: string, details?: Record<string, unknown>) => void) {
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "uploads";
   const extension = extname(file.name || "").toLowerCase() || ".png";
@@ -57,7 +85,7 @@ export async function storeImageOnSupabase(file: File, scope: string, fallbackNa
   });
 
   try {
-    const supabase = getSupabaseClient();
+    const supabase = await ensurePublicBucket(bucket);
     const { error: uploadError } = await supabase.storage.from(bucket).upload(storagePath, buffer, {
       contentType: mimeType,
       upsert: true,
