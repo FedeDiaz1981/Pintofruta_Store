@@ -8,6 +8,7 @@ import { postgresPool } from "@/infrastructure/db/postgres";
 import { siteContentSchemaSql } from "@/infrastructure/site-content/schema";
 import { normalizeText } from "@/lib/catalog";
 import type { AdminTableKey } from "@/application/admin-crud";
+import type { PoolClient } from "pg";
 
 type PayloadRecord = Record<string, string | number | boolean | null | undefined>;
 
@@ -102,6 +103,25 @@ function generateSku(id: number) {
 
 function isFileValue(value: unknown): value is File {
   return typeof File !== "undefined" && value instanceof File;
+}
+
+function isTransientConnectionError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("connection closed") ||
+    message.includes("connection terminated unexpectedly") ||
+    message.includes("terminating connection") ||
+    message.includes("socket hang up") ||
+    message.includes("econnreset") ||
+    message.includes("etimedout") ||
+    message.includes("econnrefused") ||
+    message.includes("enotfound") ||
+    message.includes("enetunreach")
+  );
 }
 
 function getUploadsBaseDir() {
@@ -475,86 +495,107 @@ function parsePackItems(value: unknown): PackItemDraft[] {
 }
 
 async function savePack(record: PayloadRecord, formData: FormData) {
-  const client = await postgresPool!.connect();
+  const id = record.id ? toNumber(record.id) : await nextNumericId("promotion_packs");
+  const title = toStringValue(record.title);
+  const apodo = toStringValue(record.apodo) || slugify(title);
+  const items = parsePackItems(record.items_json);
+  const uploadedImage = formData.get("image_file");
+  const image =
+    isFileValue(uploadedImage) && uploadedImage.size > 0
+      ? await storeUploadedImage(uploadedImage, "promociones", title || apodo || `promocion-${id}`)
+      : toStringValue(record.image) || null;
 
-  try {
+  if (!title) {
+    throw new Error("El pack necesita un título.");
+  }
+
+  if (toNumber(record.publicPrice) <= 0) {
+    throw new Error("El pack necesita un precio final válido.");
+  }
+
+  if (items.length === 0) {
+    throw new Error("El pack debe incluir al menos un producto.");
+  }
+
+  if (!image) {
+    throw new Error("La promoción necesita una imagen.");
+  }
+
+  const runTransaction = async (client: PoolClient) => {
     await client.query("begin");
 
-    const id = record.id ? toNumber(record.id) : await nextNumericId("promotion_packs");
-    const title = toStringValue(record.title);
-    const apodo = toStringValue(record.apodo) || slugify(title);
-    const items = parsePackItems(record.items_json);
-    const uploadedImage = formData.get("image_file");
-    const image =
-      isFileValue(uploadedImage) && uploadedImage.size > 0
-        ? await storeUploadedImage(uploadedImage, "promociones", title || apodo || `promocion-${id}`)
-        : toStringValue(record.image) || null;
-
-    if (!title) {
-      throw new Error("El pack necesita un título.");
-    }
-
-    if (toNumber(record.publicPrice) <= 0) {
-      throw new Error("El pack necesita un precio final válido.");
-    }
-
-    if (items.length === 0) {
-      throw new Error("El pack debe incluir al menos un producto.");
-    }
-
-    if (!image) {
-      throw new Error("La promoción necesita una imagen.");
-    }
-
-    await client.query(
-      `
-        insert into promotion_packs (
-          id, apodo, title, description, category, public_price, image, active, featured, order_index
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-        on conflict (id) do update set
-          apodo = excluded.apodo,
-          title = excluded.title,
-          description = excluded.description,
-          category = excluded.category,
-          public_price = excluded.public_price,
-          image = excluded.image,
-          active = excluded.active,
-          featured = excluded.featured,
-          order_index = excluded.order_index,
-          updated_at = now()
-      `,
-      [
-        id,
-        apodo,
-        title,
-        toStringValue(record.description),
-        toStringValue(record.category),
-        toNumber(record.publicPrice),
-        image,
-        toBoolean(record.active),
-        toBoolean(record.featured),
-        toNumber(record.order),
-      ],
-    );
-
-    await client.query("delete from promotion_pack_items where pack_id = $1", [id]);
-
-    for (const item of items) {
+    try {
       await client.query(
         `
-          insert into promotion_pack_items (pack_id, product_id, quantity, order_index)
-          values ($1, $2, $3, $4)
+          insert into promotion_packs (
+            id, apodo, title, description, category, public_price, image, active, featured, order_index
+          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          on conflict (id) do update set
+            apodo = excluded.apodo,
+            title = excluded.title,
+            description = excluded.description,
+            category = excluded.category,
+            public_price = excluded.public_price,
+            image = excluded.image,
+            active = excluded.active,
+            featured = excluded.featured,
+            order_index = excluded.order_index,
+            updated_at = now()
         `,
-        [id, item.productId, item.quantity, item.order],
+        [
+          id,
+          apodo,
+          title,
+          toStringValue(record.description),
+          toStringValue(record.category),
+          toNumber(record.publicPrice),
+          image,
+          toBoolean(record.active),
+          toBoolean(record.featured),
+          toNumber(record.order),
+        ],
       );
-    }
 
-    await client.query("commit");
-  } catch (error) {
-    await client.query("rollback");
-    throw error;
-  } finally {
-    client.release();
+      await client.query("delete from promotion_pack_items where pack_id = $1", [id]);
+
+      for (const item of items) {
+        await client.query(
+          `
+            insert into promotion_pack_items (pack_id, product_id, quantity, order_index)
+            values ($1, $2, $3, $4)
+          `,
+          [id, item.productId, item.quantity, item.order],
+        );
+      }
+
+      await client.query("commit");
+    } catch (error) {
+      try {
+        await client.query("rollback");
+      } catch {
+        // Si la conexión ya se cerró, dejamos que el error original suba.
+      }
+
+      throw error;
+    }
+  };
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const client = await postgresPool!.connect();
+
+    try {
+      await runTransaction(client);
+      return;
+    } catch (error) {
+      if (!isTransientConnectionError(error) || attempt === 1) {
+        throw error;
+      }
+
+      await postgresPool!.end().catch(() => undefined);
+      continue;
+    } finally {
+      client.release();
+    }
   }
 }
 
