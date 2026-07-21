@@ -27,7 +27,20 @@ function buildPoolConfig(url: URL, host: string): PoolConfig {
           servername: url.hostname,
         }
       : undefined,
+    max: 1,
+    keepAlive: true,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 10_000,
   };
+}
+
+async function createPool() {
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL no está configurada.");
+  }
+
+  const url = new URL(databaseUrl);
+  return new Pool(buildPoolConfig(url, url.hostname));
 }
 
 async function getPool() {
@@ -36,28 +49,70 @@ async function getPool() {
   }
 
   if (!poolPromise) {
-    const url = new URL(databaseUrl);
-    poolPromise = Promise.resolve(new Pool(buildPoolConfig(url, url.hostname)));
+    poolPromise = createPool();
   }
 
   return poolPromise;
+}
+
+function isTransientConnectionError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("connection closed") ||
+    message.includes("connection terminated unexpectedly") ||
+    message.includes("terminating connection") ||
+    message.includes("socket hang up") ||
+    message.includes("econnreset") ||
+    message.includes("etimedout") ||
+    message.includes("econnrefused") ||
+    message.includes("enotfound") ||
+    message.includes("enetunreach")
+  );
+}
+
+async function resetPool() {
+  const previous = poolPromise;
+  poolPromise = null;
+
+  try {
+    const pool = previous ? await previous : null;
+    if (pool) {
+      await pool.end();
+    }
+  } catch {
+    // Ignorado a propósito: si la conexión ya estaba cerrada, forzamos una recreación limpia.
+  }
+}
+
+async function withRetry<T>(runner: (pool: Pool) => Promise<T>) {
+  try {
+    const pool = await getPool();
+    return await runner(pool);
+  } catch (error) {
+    if (!isTransientConnectionError(error)) {
+      throw error;
+    }
+
+    await resetPool();
+    const pool = await getPool();
+    return runner(pool);
+  }
 }
 
 export const postgresPool: Pool | null = databaseUrl
   ? (new Proxy({} as Pool, {
       get(_target, prop) {
         if (prop === "query") {
-          return async (...args: unknown[]) => {
-            const pool = await getPool();
-            return (pool.query as (...queryArgs: unknown[]) => Promise<unknown>)(...args);
-          };
+          return async (...args: unknown[]) =>
+            withRetry(async (pool) => (pool.query as (...queryArgs: unknown[]) => Promise<unknown>)(...args));
         }
 
         if (prop === "connect") {
-          return async () => {
-            const pool = await getPool();
-            return pool.connect();
-          };
+          return async () => withRetry(async (pool) => pool.connect());
         }
 
         if (prop === "end") {
