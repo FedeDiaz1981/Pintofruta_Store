@@ -1,11 +1,9 @@
 ﻿"use server";
 
-import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import { extname, join } from "node:path";
 import { revalidatePath } from "next/cache";
 import { postgresPool } from "@/infrastructure/db/postgres";
 import { siteContentSchemaSql } from "@/infrastructure/site-content/schema";
+import { storeImageOnSupabase } from "@/infrastructure/storage/supabase-storage";
 import { normalizeText } from "@/lib/catalog";
 import type { AdminTableKey } from "@/application/admin-crud";
 import type { PoolClient } from "pg";
@@ -128,55 +126,8 @@ function isTransientConnectionError(error: unknown) {
   );
 }
 
-function getUploadsBaseDir() {
-  return process.env.UPLOADS_DIR || join(process.cwd(), "public", "uploads");
-}
-
 async function storeUploadedImage(file: File, scope: string, fallbackName: string) {
-  const extension = extname(file.name || "").toLowerCase() || ".png";
-  const safeName = slugify(fallbackName || file.name || "imagen");
-  const fileName = `${safeName}-${Date.now()}-${randomUUID().slice(0, 8)}${extension}`;
-  const uploadsDir = join(getUploadsBaseDir(), scope);
-  const targetPath = join(uploadsDir, fileName);
-  const relativePath = `/uploads/${scope}/${fileName}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
-
-  adminLog("upload:start", {
-    scope,
-    fileName: file.name,
-    mimeType: file.type || "image/png",
-    size: file.size,
-    uploadsDir,
-    targetPath,
-  });
-
-  try {
-    await mkdir(uploadsDir, { recursive: true });
-    await writeFile(targetPath, buffer);
-    adminLog("upload:stored-on-disk", {
-      scope,
-      targetPath,
-      relativePath,
-      size: buffer.length,
-    });
-    return relativePath;
-  } catch (error) {
-    console.warn(`No se pudo guardar la imagen en disco para ${scope}; se usará base64 embebido.`, error);
-    adminLog("upload:disk-failed-base64-fallback", {
-      scope,
-      targetPath,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  const mimeType = file.type || "image/png";
-  const dataUrl = `data:${mimeType};base64,${buffer.toString("base64")}`;
-  adminLog("upload:returned-data-url", {
-    scope,
-    mimeType,
-    length: dataUrl.length,
-  });
-  return dataUrl;
+  return storeImageOnSupabase(file, scope, fallbackName, adminLog);
 }
 
 type PackItemDraft = {

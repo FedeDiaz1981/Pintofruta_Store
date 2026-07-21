@@ -13,6 +13,7 @@
     "db:reset": "node scripts/local-postgres.mjs reset"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.8",
     "daisyui": "^5.6.17",
     "embla-carousel-react": "^8.6.0",
     "lucide-react": "^1.24.0",
