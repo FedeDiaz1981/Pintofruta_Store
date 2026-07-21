@@ -12,6 +12,10 @@ import type { PoolClient } from "pg";
 
 type PayloadRecord = Record<string, string | number | boolean | null | undefined>;
 
+function adminLog(stage: string, details: Record<string, unknown> = {}) {
+  console.info(`[admin-action] ${stage}`, details);
+}
+
 function toBoolean(value: unknown) {
   if (typeof value === "boolean") {
     return value;
@@ -137,16 +141,42 @@ async function storeUploadedImage(file: File, scope: string, fallbackName: strin
   const relativePath = `/uploads/${scope}/${fileName}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 
+  adminLog("upload:start", {
+    scope,
+    fileName: file.name,
+    mimeType: file.type || "image/png",
+    size: file.size,
+    uploadsDir,
+    targetPath,
+  });
+
   try {
     await mkdir(uploadsDir, { recursive: true });
     await writeFile(targetPath, buffer);
+    adminLog("upload:stored-on-disk", {
+      scope,
+      targetPath,
+      relativePath,
+      size: buffer.length,
+    });
     return relativePath;
   } catch (error) {
     console.warn(`No se pudo guardar la imagen en disco para ${scope}; se usará base64 embebido.`, error);
+    adminLog("upload:disk-failed-base64-fallback", {
+      scope,
+      targetPath,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   const mimeType = file.type || "image/png";
-  return `data:${mimeType};base64,${buffer.toString("base64")}`;
+  const dataUrl = `data:${mimeType};base64,${buffer.toString("base64")}`;
+  adminLog("upload:returned-data-url", {
+    scope,
+    mimeType,
+    length: dataUrl.length,
+  });
+  return dataUrl;
 }
 
 type PackItemDraft = {
@@ -500,6 +530,15 @@ async function savePack(record: PayloadRecord, formData: FormData) {
   const apodo = toStringValue(record.apodo) || slugify(title);
   const items = parsePackItems(record.items_json);
   const uploadedImage = formData.get("image_file");
+  adminLog("pack:save-start", {
+    id,
+    title,
+    apodo,
+    itemsCount: items.length,
+    hasUploadedImage: isFileValue(uploadedImage) && uploadedImage.size > 0,
+    uploadedImageName: isFileValue(uploadedImage) ? uploadedImage.name : null,
+    uploadedImageSize: isFileValue(uploadedImage) ? uploadedImage.size : null,
+  });
   const image =
     isFileValue(uploadedImage) && uploadedImage.size > 0
       ? await storeUploadedImage(uploadedImage, "promociones", title || apodo || `promocion-${id}`)
@@ -522,9 +561,11 @@ async function savePack(record: PayloadRecord, formData: FormData) {
   }
 
   const runTransaction = async (client: PoolClient) => {
+    adminLog("pack:transaction-begin", { id, title, apodo, itemsCount: items.length });
     await client.query("begin");
 
     try {
+      adminLog("pack:upsert-pack", { id, title, apodo, imageType: image.startsWith("data:") ? "data-url" : "path" });
       await client.query(
         `
           insert into promotion_packs (
@@ -557,8 +598,15 @@ async function savePack(record: PayloadRecord, formData: FormData) {
       );
 
       await client.query("delete from promotion_pack_items where pack_id = $1", [id]);
+      adminLog("pack:cleared-items", { id });
 
       for (const item of items) {
+        adminLog("pack:insert-item", {
+          id,
+          productId: item.productId,
+          quantity: item.quantity,
+          order: item.order,
+        });
         await client.query(
           `
             insert into promotion_pack_items (pack_id, product_id, quantity, order_index)
@@ -569,7 +617,14 @@ async function savePack(record: PayloadRecord, formData: FormData) {
       }
 
       await client.query("commit");
+      adminLog("pack:transaction-commit", { id, title, apodo, itemsCount: items.length });
     } catch (error) {
+      adminLog("pack:transaction-error", {
+        id,
+        title,
+        apodo,
+        error: error instanceof Error ? error.message : String(error),
+      });
       try {
         await client.query("rollback");
       } catch {
@@ -581,17 +636,24 @@ async function savePack(record: PayloadRecord, formData: FormData) {
   };
 
   for (let attempt = 0; attempt < 2; attempt++) {
+    adminLog("pack:connect-attempt", { id, attempt: attempt + 1 });
     const client = await postgresPool!.connect();
 
     try {
       await runTransaction(client);
       return;
     } catch (error) {
+      adminLog("pack:attempt-failed", {
+        id,
+        attempt: attempt + 1,
+        error: error instanceof Error ? error.message : String(error),
+      });
       if (!isTransientConnectionError(error) || attempt === 1) {
         throw error;
       }
 
       await postgresPool!.end().catch(() => undefined);
+      adminLog("pack:pool-reset-after-transient-error", { id, attempt: attempt + 1 });
       continue;
     } finally {
       client.release();
