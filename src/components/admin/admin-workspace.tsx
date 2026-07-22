@@ -40,6 +40,12 @@ type BulkDeleteState = {
   error?: string;
 };
 
+type UploadState = {
+  loading: boolean;
+  error?: string;
+  fileName?: string;
+};
+
 const sidebarSections: { title: string; keys: AdminTableKey[] }[] = [
   { title: "Listas", keys: ["products", "packs", "brands", "categories", "users"] },
   { title: "Contenido", keys: ["hero_slides", "banners"] },
@@ -206,6 +212,26 @@ function serializeMultiSelectValues(values: string[]) {
 
 function serializePackSelections(selections: PackSelection[]) {
   return JSON.stringify(selections.map((item, index) => ({ ...item, order: index + 1 })));
+}
+
+async function uploadAdminImage(file: File, scope: string, fallbackName: string) {
+  const formData = new FormData();
+  formData.set("file", file);
+  formData.set("scope", scope);
+  formData.set("fallbackName", fallbackName);
+
+  const response = await fetch("/api/admin/upload-image", {
+    method: "POST",
+    body: formData,
+  });
+
+  const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; publicUrl?: string; error?: string };
+
+  if (!response.ok || !payload.ok || !payload.publicUrl) {
+    throw new Error(payload.error || "No se pudo subir la imagen.");
+  }
+
+  return payload.publicUrl;
 }
 
 function formatCellValue(field: AdminFieldDefinition | undefined, value: unknown) {
@@ -550,6 +576,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   const [query, setQuery] = useState("");
   const [packSearch, setPackSearch] = useState("");
   const [fileNames, setFileNames] = useState<Record<string, string>>({});
+  const [uploadStates, setUploadStates] = useState<Record<string, UploadState>>({});
   const [selectedRowId, setSelectedRowId] = useState("");
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [editor, setEditor] = useState<EditorState | null>(null);
@@ -588,6 +615,10 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   const activeCount = getActiveCount(visibleRows as Record<string, unknown>[]);
   const maxOrder = getMaxOrder(visibleRows as Record<string, unknown>[]);
   const totalCount = visibleRows.length;
+  const hasPendingUploads = useMemo(
+    () => Object.values(uploadStates).some((uploadState) => uploadState.loading),
+    [uploadStates],
+  );
 
   useEffect(() => {
     if (selectAllRef.current) {
@@ -669,6 +700,8 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
     setSelectedRowIds([]);
     setQuery("");
     setPackSearch("");
+    setFileNames({});
+    setUploadStates({});
     setEditor({
       tableKey: table.key,
       rowId: "",
@@ -683,6 +716,8 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
     setSelectedRowId(rowId);
     setSelectedRowIds([]);
     setPackSearch("");
+    setFileNames({});
+    setUploadStates({});
     setEditor({
       tableKey: table.key,
       rowId,
@@ -691,6 +726,8 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   }
 
   function closeEditor() {
+    setFileNames({});
+    setUploadStates({});
     setEditor(null);
   }
 
@@ -1078,7 +1115,15 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
               </button>
             </div>
 
-            <form action={handleSave} className="max-h-[calc(92vh-110px)] overflow-auto px-6 py-6">
+            <form
+              action={handleSave}
+              onSubmit={(event) => {
+                if (hasPendingUploads) {
+                  event.preventDefault();
+                }
+              }}
+              className="max-h-[calc(92vh-110px)] overflow-auto px-6 py-6"
+            >
               <input type="hidden" name="table" value={editor.tableKey} />
               <input type="hidden" name="payload_json" value={stringifyDraft(editor.draft)} />
 
@@ -1336,6 +1381,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                   if (field.kind === "file") {
                     const imageValue = typeof value === "string" ? value.trim() : "";
                     const selectedFileName = fileNames[field.key] ?? "";
+                    const uploadState = uploadStates[field.key];
 
                     return (
                       <div key={field.key} className={`block ${fullWidth ? "md:col-span-2" : ""}`}>
@@ -1366,17 +1412,93 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
 
                             <input
                               type="file"
-                              name={`${field.key}_file`}
                               accept="image/*"
                               className="sr-only"
-                              onChange={(event) =>
+                              disabled={Boolean(uploadState?.loading)}
+                              onChange={async (event) => {
+                                const file = event.target.files?.[0];
+
+                                if (!file) {
+                                  return;
+                                }
+
+                                const previousValue = typeof editor?.draft[field.key] === "string" ? editor.draft[field.key] : "";
+
                                 setFileNames((current) => ({
                                   ...current,
-                                  [field.key]: event.target.files?.[0]?.name ?? "",
-                                }))
-                              }
+                                  [field.key]: file.name,
+                                }));
+                                setUploadStates((current) => ({
+                                  ...current,
+                                  [field.key]: {
+                                    loading: true,
+                                    fileName: file.name,
+                                  },
+                                }));
+
+                                try {
+                                  const fallbackName = [
+                                    String(editor?.draft.title ?? "").trim(),
+                                    String(editor?.draft.name ?? "").trim(),
+                                    String(editor?.draft.sku ?? "").trim(),
+                                    selectedTable.label,
+                                    field.key,
+                                  ]
+                                    .filter(Boolean)
+                                    .join("-");
+
+                                  const publicUrl = await uploadAdminImage(file, selectedTable.key, fallbackName);
+
+                                  setEditor((current) =>
+                                    current
+                                      ? {
+                                          ...current,
+                                          draft: { ...current.draft, [field.key]: publicUrl },
+                                        }
+                                      : current,
+                                  );
+                                  setUploadStates((current) => ({
+                                    ...current,
+                                    [field.key]: {
+                                      loading: false,
+                                      fileName: file.name,
+                                    },
+                                  }));
+                                } catch (error) {
+                                  setEditor((current) =>
+                                    current
+                                      ? {
+                                          ...current,
+                                          draft: { ...current.draft, [field.key]: previousValue },
+                                        }
+                                      : current,
+                                  );
+                                  setUploadStates((current) => ({
+                                    ...current,
+                                    [field.key]: {
+                                      loading: false,
+                                      fileName: file.name,
+                                      error: error instanceof Error ? error.message : "No se pudo subir la imagen.",
+                                    },
+                                  }));
+                                } finally {
+                                  event.target.value = "";
+                                }
+                              }}
                             />
                           </label>
+
+                          {uploadState?.loading ? (
+                            <div className="rounded-[18px] border border-[rgba(168,109,69,0.18)] bg-[rgba(168,109,69,0.08)] px-4 py-3 text-sm text-[var(--pf-primary-darker)]">
+                              Subiendo imagen...
+                            </div>
+                          ) : null}
+
+                          {uploadState?.error ? (
+                            <div className="rounded-[18px] border border-[rgba(185,79,54,0.18)] bg-[rgba(185,79,54,0.08)] px-4 py-3 text-sm text-[var(--pf-wood-muted)]">
+                              {uploadState.error}
+                            </div>
+                          ) : null}
 
                           {imageValue ? (
                             <div className="overflow-hidden rounded-[18px] border border-[var(--pf-border-soft)] bg-[#f7f4ee]">
@@ -1445,6 +1567,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
               <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-5">
                 <button
                   type="submit"
+                  disabled={hasPendingUploads}
                   className="rounded-full bg-[linear-gradient(180deg,var(--pf-secondary-light)_0%,var(--pf-secondary)_100%)] px-6 py-3 text-sm font-black text-slate-900 shadow-[0_14px_30px_rgba(168,109,69,0.22)] transition hover:brightness-105"
                 >
                   Guardar

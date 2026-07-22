@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { postgresPool } from "@/infrastructure/db/postgres";
 import { siteContentSchemaSql } from "@/infrastructure/site-content/schema";
-import { storeImageOnSupabase } from "@/infrastructure/storage/supabase-storage";
 import { normalizeText } from "@/lib/catalog";
 import type { AdminTableKey } from "@/application/admin-crud";
 import type { PoolClient } from "pg";
@@ -124,10 +123,6 @@ function isTransientConnectionError(error: unknown) {
     message.includes("enotfound") ||
     message.includes("enetunreach")
   );
-}
-
-async function storeUploadedImage(file: File, scope: string, fallbackName: string) {
-  return storeImageOnSupabase(file, scope, fallbackName, adminLog);
 }
 
 type PackItemDraft = {
@@ -480,20 +475,15 @@ async function savePack(record: PayloadRecord, formData: FormData) {
   const title = toStringValue(record.title);
   const apodo = toStringValue(record.apodo) || slugify(title);
   const items = parsePackItems(record.items_json);
-  const uploadedImage = formData.get("image_file");
+  const image = toStringValue(record.image) || null;
+
   adminLog("pack:save-start", {
     id,
     title,
     apodo,
     itemsCount: items.length,
-    hasUploadedImage: isFileValue(uploadedImage) && uploadedImage.size > 0,
-    uploadedImageName: isFileValue(uploadedImage) ? uploadedImage.name : null,
-    uploadedImageSize: isFileValue(uploadedImage) ? uploadedImage.size : null,
+    hasImageUrl: Boolean(image),
   });
-  const image =
-    isFileValue(uploadedImage) && uploadedImage.size > 0
-      ? await storeUploadedImage(uploadedImage, "promociones", title || apodo || `promocion-${id}`)
-      : toStringValue(record.image) || null;
 
   if (!title) {
     throw new Error("El pack necesita un título.");
@@ -810,7 +800,7 @@ function refreshAdminViews() {
   revalidatePath("/galeria");
   revalidatePath("/busqueda");
   revalidatePath("/carrito");
-  revalidatePath("/producto/[sku]");
+  revalidatePath("/producto/[sku]", "page");
 }
 
 export async function saveAdminRecord(formData: FormData) {

@@ -27,7 +27,7 @@ function buildPoolConfig(url: URL, host: string): PoolConfig {
           servername: url.hostname,
         }
       : undefined,
-    max: 1,
+    max: 5,
     keepAlive: true,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,

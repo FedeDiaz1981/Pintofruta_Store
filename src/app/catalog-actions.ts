@@ -30,12 +30,12 @@ export async function recordProductView(productId: number) {
   await updateProductCounter(productId, "views_count");
   revalidatePath("/");
   revalidatePath("/galeria");
-  revalidatePath("/producto/[sku]");
+  revalidatePath("/producto/[sku]", "page");
 }
 
 export async function recordProductSale(productId: number) {
   await updateProductCounter(productId, "sales_count");
   revalidatePath("/");
   revalidatePath("/galeria");
-  revalidatePath("/producto/[sku]");
+  revalidatePath("/producto/[sku]", "page");
 }

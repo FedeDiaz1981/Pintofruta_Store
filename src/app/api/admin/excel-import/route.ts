@@ -17,7 +17,7 @@ function refreshAppViews() {
   revalidatePath("/galeria");
   revalidatePath("/busqueda");
   revalidatePath("/carrito");
-  revalidatePath("/producto/[sku]");
+  revalidatePath("/producto/[sku]", "page");
 }
 
 export async function POST(request: Request) {
