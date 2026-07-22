@@ -216,10 +216,14 @@ function getHybridFeaturedScore(product: ProductItem) {
   return getPopularityScore(product) + getFeaturedBoost(product);
 }
 
+function hasRenderableImage(product: ProductItem) {
+  return Boolean(product.image && product.image.trim());
+}
+
 function buildFeaturedProducts(products: ProductItem[], limit = 12) {
-  const publishedProducts = products.filter((item) => item.status === "published");
+  const publishedProducts = products.filter((item) => item.status === "published" && item.featured && hasRenderableImage(item));
   const priorityFeatured = publishedProducts
-    .filter((item) => item.featured && (item.featuredPriority ?? 0) > 0)
+    .filter((item) => (item.featuredPriority ?? 0) > 0)
     .sort((left, right) => {
       const leftPriority = left.featuredPriority ?? 0;
       const rightPriority = right.featuredPriority ?? 0;
@@ -241,7 +245,7 @@ function buildFeaturedProducts(products: ProductItem[], limit = 12) {
       }
 
       return left.name.localeCompare(right.name, "es", { sensitivity: "base" });
-    });
+  });
 
   const insertions = new Map<number, ProductItem[]>();
 

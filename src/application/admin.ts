@@ -2,6 +2,10 @@ import { getSiteContent } from "@/infrastructure/site-content.repository";
 import type { BrandItem, CategoryItem, ProductItem, UserItem } from "@/domain/site-content";
 import { buildAdminCrudViewModel, type AdminCrudViewModel } from "@/application/admin-crud";
 
+function hasRenderableImage(product: ProductItem) {
+  return Boolean(product.image && product.image.trim());
+}
+
 export interface AdminOverview {
   counts: {
     products: number;
@@ -36,7 +40,7 @@ export async function getAdminOverview(): Promise<AdminOverview> {
       heroSlides: activeHeroSlides.length,
       packs: activePacks.length,
     },
-    featuredProducts: activeProducts.filter((product) => product.featured).slice(0, 8),
+    featuredProducts: activeProducts.filter((product) => product.featured && hasRenderableImage(product)).slice(0, 8),
     activeUsers: activeUsers.slice(0, 6),
     visibleCategories: visibleCategories.slice(0, 10),
     featuredBrands: activeBrands.filter((brand) => brand.featured),
@@ -61,7 +65,7 @@ export async function getAdminPanelViewModel(): Promise<AdminCrudViewModel> {
       heroSlides: activeHeroSlides.length,
       packs: activePacks.length,
     },
-    featuredProducts: activeProducts.filter((product) => product.featured).slice(0, 8),
+    featuredProducts: activeProducts.filter((product) => product.featured && hasRenderableImage(product)).slice(0, 8),
     activeUsers: activeUsers.slice(0, 6),
     visibleCategories: visibleCategories.slice(0, 10),
     featuredBrands: activeBrands.filter((brand) => brand.featured),
