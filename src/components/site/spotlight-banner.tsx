@@ -25,9 +25,9 @@ export function SpotlightBanner({ slide }: { slide: HeroSlide | null }) {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_right_center,rgba(74,57,38,0.16),transparent_38%)]" />
         <div className="absolute inset-x-0 bottom-0 h-32 bg-[linear-gradient(180deg,transparent,rgba(248,242,232,0.82)_80%,rgba(248,242,232,0.96))]" />
 
-        <div className="relative z-10 flex h-full items-center">
-          <div className="pf-shell px-4 sm:px-6 lg:px-12">
-            <div className="max-w-2xl py-10 sm:py-14 lg:py-16">
+        <div className="relative z-10 flex h-full items-center justify-end">
+          <div className="pf-shell w-full px-4 sm:px-6 lg:px-12">
+            <div className="ml-auto max-w-[min(100%,42rem)] py-10 text-right sm:py-14 lg:max-w-[46%] lg:py-16 xl:max-w-[40%]">
               <span className="inline-flex rounded-full bg-[rgba(168,109,69,0.14)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-[var(--pf-primary-darker)] shadow-[0_8px_18px_rgba(74,57,38,0.08)]">
                 {slide.badge}
               </span>
@@ -36,11 +36,11 @@ export function SpotlightBanner({ slide }: { slide: HeroSlide | null }) {
                 {slide.title}
               </h2>
 
-              <p className="mt-4 max-w-xl text-lg leading-8 text-[var(--pf-text-soft)]">
+              <p className="mt-4 ml-auto max-w-xl text-lg leading-8 text-[var(--pf-text-soft)]">
                 {slide.subtitle}
               </p>
 
-              <div className="mt-8 flex flex-wrap gap-3">
+              <div className="mt-8 flex flex-wrap justify-end gap-3">
                 <Link href={slide.link} className={buttonVariants({ variant: "primary", size: "lg" })}>
                   Ir a la galería
                 </Link>
