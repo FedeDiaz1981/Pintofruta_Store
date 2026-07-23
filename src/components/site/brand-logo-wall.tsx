@@ -21,20 +21,18 @@ function MobileBrandRail({ brands }: { brands: BrandItem[] }) {
               <div key={brand.id} className="min-w-0 flex-[0_0_68vw] px-2 sm:flex-[0_0_52vw] md:flex-[0_0_40vw]">
                 <Link
                   href={`/galeria?brand=${encodeURIComponent(brand.name)}`}
-                  className="flex h-[156px] items-center justify-center rounded-[1.6rem] border border-[rgba(168,109,69,0.12)] bg-[rgba(255,255,255,0.72)] px-4 py-5 shadow-[0_10px_24px_rgba(74,57,38,0.06)]"
+                  className="relative flex aspect-square items-stretch justify-stretch overflow-hidden rounded-[1.6rem] border border-[rgba(168,109,69,0.12)] bg-[rgba(255,255,255,0.72)] shadow-[0_10px_24px_rgba(74,57,38,0.06)]"
                 >
                   {hasImage ? (
-                    <div className="relative h-[92px] w-full">
-                      <Image
-                        src={publicAsset(brand.image)}
-                        alt={brand.name}
-                        fill
-                        className="object-contain p-1"
-                        sizes="68vw"
-                      />
-                    </div>
+                    <Image
+                      src={publicAsset(brand.image)}
+                      alt={brand.name}
+                      fill
+                      className="object-cover"
+                      sizes="68vw"
+                    />
                   ) : (
-                    <div className="flex h-[92px] w-full items-center justify-center px-2 text-center">
+                    <div className="flex h-full w-full items-center justify-center px-3 text-center">
                       <span className="text-[0.98rem] font-semibold tracking-[0.04em] text-[var(--pf-text)]">{brand.name}</span>
                     </div>
                   )}
