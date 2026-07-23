@@ -54,16 +54,16 @@ function MobileHeroCarousel({ slides, visibleIndex }: { slides: HeroSlide[]; vis
                       />
                     </picture>
 
-                    <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(248,242,232,0.10)_0%,rgba(248,242,232,0.32)_32%,rgba(248,242,232,0.82)_100%)]" />
-                    <div className="absolute inset-x-0 top-0 h-40 bg-[linear-gradient(180deg,rgba(248,242,232,0.46),transparent)]" />
+                    <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(248,242,232,0.08)_0%,rgba(248,242,232,0.24)_26%,rgba(248,242,232,0.64)_74%,rgba(248,242,232,0.92)_100%)]" />
+                    <div className="absolute inset-x-0 top-0 h-36 bg-[linear-gradient(180deg,rgba(248,242,232,0.54),transparent)]" />
 
-                    <div className="relative z-10 flex h-full w-full items-end">
-                      <div className="w-full px-4 pb-5 pt-24">
+                    <div className="relative z-10 flex h-full w-full items-start">
+                      <div className="w-full px-4 pb-4 pt-12">
                         <motion.span
                           initial={{ y: 10, opacity: 0 }}
                           animate={{ y: 0, opacity: 1 }}
                           transition={{ duration: 0.4, ease: "easeOut" }}
-                          className="inline-flex rounded-full bg-[rgba(168,109,69,0.14)] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.32em] text-[var(--pf-primary-darker)] shadow-[0_8px_18px_rgba(74,57,38,0.08)]"
+                          className="inline-flex rounded-full bg-[rgba(168,109,69,0.14)] px-4 py-2 text-[11px] font-black uppercase tracking-[0.34em] text-[var(--pf-primary-darker)] shadow-[0_8px_18px_rgba(74,57,38,0.08)]"
                         >
                           {slide.badge}
                         </motion.span>
@@ -71,7 +71,7 @@ function MobileHeroCarousel({ slides, visibleIndex }: { slides: HeroSlide[]; vis
                           initial={{ y: 14, opacity: 0 }}
                           animate={{ y: 0, opacity: 1 }}
                           transition={{ duration: 0.45, ease: "easeOut", delay: 0.04 }}
-                          className="mt-3 max-w-[12ch] text-[2.55rem] font-extrabold leading-[0.92] tracking-[-0.06em] text-[var(--pf-text)]"
+                          className="mt-4 max-w-[10ch] text-[3rem] font-extrabold leading-[0.9] tracking-[-0.065em] text-[var(--pf-text)]"
                         >
                           {slide.title}
                         </motion.h1>
@@ -79,7 +79,7 @@ function MobileHeroCarousel({ slides, visibleIndex }: { slides: HeroSlide[]; vis
                           initial={{ y: 14, opacity: 0 }}
                           animate={{ y: 0, opacity: 1 }}
                           transition={{ duration: 0.45, ease: "easeOut", delay: 0.08 }}
-                          className="mt-3 max-w-[28ch] text-[0.95rem] leading-6 text-[var(--pf-text-soft)]"
+                          className="mt-4 max-w-[22ch] text-[1.05rem] leading-7 text-[var(--pf-text-soft)]"
                         >
                           {slide.subtitle}
                         </motion.p>
@@ -87,7 +87,7 @@ function MobileHeroCarousel({ slides, visibleIndex }: { slides: HeroSlide[]; vis
                           initial={{ y: 14, opacity: 0 }}
                           animate={{ y: 0, opacity: 1 }}
                           transition={{ duration: 0.45, ease: "easeOut", delay: 0.12 }}
-                          className="mt-5"
+                          className="mt-6"
                         >
                           <Link href={resolveHref(slide.link)} className={buttonVariants({ variant: "primary", size: "lg" })}>
                             Ir a la galería
