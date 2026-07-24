@@ -114,7 +114,7 @@ function emptyDraftFor(table: AdminTableDefinition): DraftRecord {
 
   for (const field of table.fields) {
     if (field.kind === "boolean") {
-      draft[field.key] = ["active", "visible"].includes(field.key);
+      draft[field.key] = ["active", "visible", "homeMenu"].includes(field.key);
       continue;
     }
 

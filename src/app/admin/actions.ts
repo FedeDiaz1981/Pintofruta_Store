@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { postgresPool } from "@/infrastructure/db/postgres";
 import { siteContentSchemaSql } from "@/infrastructure/site-content/schema";
 import { normalizeText } from "@/lib/catalog";
+import { resolveCategoryIconKey } from "@/lib/category-icons";
 import type { AdminTableKey } from "@/application/admin-crud";
 import type { PoolClient } from "pg";
 
@@ -337,16 +338,24 @@ async function saveBrand(record: PayloadRecord) {
 
 async function saveCategory(record: PayloadRecord) {
   const id = record.id ? toNumber(record.id) : await nextNumericId("categories");
+  const name = toStringValue(record.name);
+  const slug = toStringValue(record.slug) || slugify(name);
+  const icon = toStringValue(record.icon) || resolveCategoryIconKey(name);
+  const homeMenu =
+    record.homeMenu == null || record.homeMenu === "" ? true : toBoolean(record.homeMenu);
+
   await postgresPool!.query(
     `
-      insert into categories (id, name, slug, visible)
-      values ($1, $2, $3, $4)
+      insert into categories (id, name, slug, visible, home_menu, icon)
+      values ($1, $2, $3, $4, $5, $6)
       on conflict (id) do update set
         name = excluded.name,
         slug = excluded.slug,
-        visible = excluded.visible
+        visible = excluded.visible,
+        home_menu = excluded.home_menu,
+        icon = excluded.icon
     `,
-    [id, toStringValue(record.name), toStringValue(record.slug) || slugify(toStringValue(record.name)), toBoolean(record.visible)],
+    [id, name, slug, toBoolean(record.visible), homeMenu, icon],
   );
 }
 

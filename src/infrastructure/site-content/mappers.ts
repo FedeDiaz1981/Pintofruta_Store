@@ -236,6 +236,8 @@ export function mapSiteContentDocument(params: {
       name: category.name,
       slug: category.slug,
       visible: category.visible,
+      homeMenu: category.home_menu ?? undefined,
+      icon: category.icon ?? undefined,
     })),
     users: users.map((user) => ({
       id: user.id,

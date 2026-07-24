@@ -12,13 +12,16 @@ export function SectionHeading({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-4 rounded-[2rem] border border-base-300/80 bg-base-100/80 p-6 shadow-sm sm:flex-row sm:items-end sm:justify-between">
+    <div className="flex flex-col gap-4 border-b border-[rgba(168,109,69,0.16)] pb-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6 sm:pb-5">
       <div className="max-w-2xl">
-        <p className="text-xs font-bold uppercase tracking-[0.32em] text-secondary">{eyebrow}</p>
-        <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-base-content sm:text-5xl">{title}</h2>
-        {description ? <p className="mt-3 max-w-2xl text-sm leading-7 text-base-content/70">{description}</p> : null}
+        <div className="flex items-center gap-3">
+          <span className="h-[1px] w-8 bg-[rgba(168,109,69,0.48)]" />
+          <p className="text-[11px] font-black uppercase tracking-[0.38em] text-[var(--pf-secondary)]">{eyebrow}</p>
+        </div>
+        <h2 className="mt-3 text-3xl font-extrabold tracking-[-0.05em] text-[var(--pf-text)] sm:text-5xl">{title}</h2>
+        {description ? <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--pf-muted)]">{description}</p> : null}
       </div>
-      {action}
+      {action ? <div className="shrink-0">{action}</div> : null}
     </div>
   );
 }

@@ -67,10 +67,16 @@ export const siteContentSchemaSql = `
     name text not null,
     slug text not null,
     visible boolean not null,
+    home_menu boolean not null default true,
+    icon text not null default 'package',
     deleted_at timestamptz
   );
 
   alter table categories add column if not exists deleted_at timestamptz;
+  alter table categories add column if not exists home_menu boolean not null default true;
+  alter table categories add column if not exists icon text not null default 'package';
+  update categories set home_menu = coalesce(home_menu, true) where home_menu is null;
+  update categories set icon = coalesce(nullif(icon, ''), 'package') where icon is null or trim(icon) = '';
 
   create table if not exists brands (
     id text primary key,

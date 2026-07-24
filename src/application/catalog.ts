@@ -334,6 +334,11 @@ export async function getHomePageViewModel(): Promise<HomePageViewModel> {
     .filter((item) => item.active && item.items.length > 0)
     .sort((left, right) => (left.order ?? 0) - (right.order ?? 0) || left.title.localeCompare(right.title, "es", { sensitivity: "base" }));
   const brands = content.brands.filter((brand) => brand.active !== false);
+  const visibleCategories = (content.categories ?? []).filter((category) => category.visible);
+  const highlightedCategories = visibleCategories.filter((category) => category.homeMenu !== false);
+  const homeMenuCategories = (highlightedCategories.length > 0 ? highlightedCategories : visibleCategories)
+    .slice()
+    .sort((left, right) => left.name.localeCompare(right.name, "es", { sensitivity: "base" }));
   const featuredBrands = brands.filter((item) => item.featured).slice(0, 6);
 
   return {
@@ -343,6 +348,7 @@ export async function getHomePageViewModel(): Promise<HomePageViewModel> {
     featuredBanner: banners[0] ?? null,
     secondaryBanner: banners[1] ?? null,
     brands,
+    homeMenuCategories,
     featuredProducts,
     trendingProducts,
     activePromotions,

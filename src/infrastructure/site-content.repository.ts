@@ -21,6 +21,7 @@ import {
 } from "@/infrastructure/site-content/mappers";
 import { fallbackSiteContent, seedLockKey, toSeedBrandRows, toSeedNavigationRows, toSeedPackRows } from "@/infrastructure/site-content/seed";
 import { siteContentSchemaSql } from "@/infrastructure/site-content/schema";
+import { resolveCategoryIconKey } from "@/lib/category-icons";
 
 const ensureSchema = cache(async () => {
   if (!postgresPool) {
@@ -205,8 +206,16 @@ async function seedIfNeeded(client: PoolClient) {
 
     for (const category of fallbackSiteContent.categories ?? []) {
       await client.query(
-        "insert into categories (id, name, slug, visible, deleted_at) values ($1, $2, $3, $4, $5)",
-        [category.id, category.name, category.slug, category.visible, category.id <= 20 ? new Date().toISOString() : null],
+        "insert into categories (id, name, slug, visible, home_menu, icon, deleted_at) values ($1, $2, $3, $4, $5, $6, $7)",
+        [
+          category.id,
+          category.name,
+          category.slug,
+          category.visible,
+          category.homeMenu ?? category.visible,
+          category.icon ?? resolveCategoryIconKey(category.name),
+          category.id <= 20 ? new Date().toISOString() : null,
+        ],
       );
     }
 
@@ -340,7 +349,7 @@ export async function getSiteContent(): Promise<SiteContentDocument> {
     );
     const categoryRows = await readRows<CategoryRow>(
       client,
-      "select id, name, slug, visible from categories where deleted_at is null order by id",
+      "select id, name, slug, visible, home_menu, icon from categories where deleted_at is null order by id",
     );
     const userRows = await readRows<UserRow>(
       client,

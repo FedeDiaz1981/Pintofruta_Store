@@ -105,6 +105,8 @@ export interface CategoryItem {
   name: string;
   slug: string;
   visible: boolean;
+  homeMenu?: boolean;
+  icon?: string;
 }
 
 export interface BrandItem {
@@ -157,6 +159,7 @@ export interface HomePageViewModel {
   featuredBanner: BannerItem | null;
   secondaryBanner: BannerItem | null;
   brands: BrandItem[];
+  homeMenuCategories: CategoryItem[];
   featuredProducts: ProductItem[];
   trendingProducts: ProductItem[];
   activePromotions: PackItem[];

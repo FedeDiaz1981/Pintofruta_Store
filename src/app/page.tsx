@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { getHomePageViewModel } from "@/application/catalog";
+import { CategoryMenuStrip } from "@/components/site/category-menu-strip";
 import { BrandLogoWall } from "@/components/site/brand-logo-wall";
 import { FeaturedProductsCarousel } from "@/components/site/featured-products-carousel";
 import { HeroCarousel } from "@/components/site/hero-carousel";
@@ -15,6 +16,8 @@ export default async function HomePage() {
   return (
     <main className="flex w-full flex-1 flex-col gap-0 px-0 py-0">
       <HeroCarousel slides={content.heroSlides} />
+
+      <CategoryMenuStrip categories={content.homeMenuCategories} />
 
       <div className="pf-shell flex flex-col gap-10 px-4 pb-6 pt-8 sm:px-6 sm:pt-10 lg:px-12 lg:pb-10 lg:pt-12">
         <section id="featured-products" className="space-y-5">
@@ -35,14 +38,16 @@ export default async function HomePage() {
         <SpotlightBanner slide={content.spotlightSlide} />
       </div>
 
-      <div className="pf-shell flex flex-col gap-10 px-4 py-6 sm:px-6 lg:px-12 lg:py-10">
-        <section>
-          <div className="space-y-5 rounded-[2rem] border border-[var(--pf-border-warm)] bg-[linear-gradient(180deg,var(--pf-surface-warm)_0%,var(--pf-sand-soft)_58%,var(--pf-surface-strong)_100%)] p-6 shadow-sm lg:p-8">
+      <section className="w-full bg-[linear-gradient(180deg,var(--pf-surface-warm)_0%,var(--pf-sand-soft)_48%,var(--pf-surface-strong)_100%)] py-10 sm:py-12 lg:py-14">
+        <div className="pf-shell px-4 sm:px-6 lg:px-12">
+          <div className="space-y-5">
             <SectionHeading eyebrow="Identidad" title="Marcas destacadas" />
             <BrandLogoWall brands={content.brands} />
           </div>
-        </section>
+        </div>
+      </section>
 
+      <div className="pf-shell flex flex-col gap-10 px-4 py-6 sm:px-6 lg:px-12 lg:py-10">
         <section id="promociones" className="space-y-5">
           <SectionHeading
             eyebrow="Colección / promociones"
@@ -55,12 +60,14 @@ export default async function HomePage() {
           />
           <PromotionCarousel promotions={content.activePromotions} />
         </section>
+      </div>
 
-        <section
-          id="Nosotros"
-          className="rounded-[2rem] border border-[var(--pf-border-warm)] bg-[linear-gradient(180deg,var(--pf-surface-warm)_0%,var(--pf-sand-soft)_58%,var(--pf-surface-strong)_100%)] p-3 shadow-sm sm:p-4 lg:p-5"
-        >
-          <div className="grid gap-4 rounded-[1.75rem] border border-[var(--pf-border-soft)] bg-[rgba(248,242,232,0.68)] p-4 sm:p-5 lg:grid-cols-[1.15fr_.95fr] lg:gap-6 lg:p-6">
+      <section
+        id="Nosotros"
+        className="w-full bg-[linear-gradient(180deg,var(--pf-surface-warm)_0%,var(--pf-sand-soft)_48%,var(--pf-surface-strong)_100%)] py-10 sm:py-12 lg:py-14"
+      >
+        <div className="pf-shell px-4 sm:px-6 lg:px-12">
+          <div className="grid gap-8 lg:grid-cols-[1.15fr_.95fr] lg:gap-10">
             <div className="flex flex-col justify-between">
               <div>
                 <span className="inline-flex rounded-full bg-[rgba(168,109,69,0.14)] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--pf-primary-darker)]">
@@ -93,8 +100,8 @@ export default async function HomePage() {
               </div>
             </div>
 
-            <div className="rounded-[1.5rem] border border-[rgba(255,255,255,0.72)] bg-[rgba(250,249,244,0.95)] p-3 shadow-[0_20px_46px_rgba(74,57,38,0.10)] sm:p-4">
-              <div className="overflow-hidden rounded-[1.3rem] bg-[rgba(249,247,240,0.98)] px-4 py-5 shadow-[inset_0_0_0_1px_rgba(212,189,156,0.18)] sm:px-5 sm:py-6">
+            <div className="rounded-[1.5rem] bg-[rgba(248,242,232,0.74)] p-0">
+              <div className="overflow-hidden rounded-[1.3rem] bg-[rgba(249,247,240,0.96)] px-4 py-5 sm:px-5 sm:py-6">
                 <div className="relative mx-auto h-[170px] w-full max-w-[560px] sm:h-[210px]">
                   <Image
                     src="/assets/images/logo/logo-Pintofruta.png"
@@ -119,8 +126,8 @@ export default async function HomePage() {
               </div>
             </div>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
     </main>
   );
 }

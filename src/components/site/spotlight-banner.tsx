@@ -1,7 +1,9 @@
 import Link from "next/link";
+
 import type { HeroSlide } from "@/domain/site-content";
-import { publicAsset } from "@/lib/catalog";
+
 import { buttonVariants } from "@/components/ui/button";
+import { publicAsset } from "@/lib/catalog";
 
 export function SpotlightBanner({ slide }: { slide: HeroSlide | null }) {
   if (!slide) {
@@ -25,23 +27,23 @@ export function SpotlightBanner({ slide }: { slide: HeroSlide | null }) {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_right_center,rgba(74,57,38,0.16),transparent_38%)]" />
         <div className="absolute inset-x-0 bottom-0 h-32 bg-[linear-gradient(180deg,transparent,rgba(248,242,232,0.82)_80%,rgba(248,242,232,0.96))]" />
 
-        <div className="absolute inset-0 z-10 flex items-start sm:relative sm:flex sm:h-full sm:items-center sm:justify-end">
-          <div className="w-full px-4 pb-4 pt-12 sm:ml-auto sm:w-full sm:px-6 sm:py-14 lg:max-w-[46%] lg:px-12 lg:py-16 xl:max-w-[40%]">
-            <span className="inline-flex rounded-full bg-[rgba(168,109,69,0.14)] px-4 py-2 text-[11px] font-black uppercase tracking-[0.34em] text-[var(--pf-primary-darker)] shadow-[0_8px_18px_rgba(74,57,38,0.08)]">
+        <div className="absolute inset-0 z-10 flex items-end sm:items-center sm:justify-start">
+          <div className="w-full px-4 pb-8 pt-12 sm:px-6 md:max-w-2xl md:py-14 lg:px-12 lg:py-16">
+            <span className="inline-flex rounded-full bg-secondary/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-secondary shadow-none">
               {slide.badge}
             </span>
 
-            <h2 className="mt-4 max-w-[10ch] text-[3rem] font-extrabold leading-[0.9] tracking-[-0.065em] text-[var(--pf-text)]">
+            <h2 className="mt-5 max-w-xl text-4xl font-extrabold tracking-tight text-[var(--pf-text)] sm:text-6xl">
               {slide.title}
             </h2>
 
-            <p className="mt-4 max-w-[22ch] text-[1.05rem] leading-7 text-[var(--pf-text-soft)]">
+            <p className="mt-4 max-w-xl text-lg leading-8 text-[var(--pf-text-soft)]/78">
               {slide.subtitle}
             </p>
 
-            <div className="mt-6">
+            <div className="mt-8 flex flex-wrap gap-3">
               <Link href={slide.link} className={buttonVariants({ variant: "primary", size: "lg" })}>
-                Ir a la galerÃ­a
+                Ir a la galería
               </Link>
             </div>
           </div>

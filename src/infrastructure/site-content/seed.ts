@@ -70,6 +70,8 @@ export type SeedCategory = {
   name: string;
   slug: string;
   visible: boolean;
+  home_menu?: boolean;
+  icon?: string;
 };
 
 export type SeedBrand = {
