@@ -1,8 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
+
 import { getHomePageViewModel } from "@/application/catalog";
-import { CategoryMenuStrip } from "@/components/site/category-menu-strip";
 import { BrandLogoWall } from "@/components/site/brand-logo-wall";
+import { CategoryMenuStrip } from "@/components/site/category-menu-strip";
 import { FeaturedProductsCarousel } from "@/components/site/featured-products-carousel";
 import { HeroCarousel } from "@/components/site/hero-carousel";
 import { PromotionCarousel } from "@/components/site/promotion-carousel";
@@ -48,17 +49,17 @@ export default async function HomePage() {
       </section>
 
       <div className="pf-shell flex flex-col gap-10 px-4 py-6 sm:px-6 lg:px-12 lg:py-10">
-        <section id="promociones" className="space-y-5">
+        <section id="trending-products" className="space-y-5">
           <SectionHeading
-            eyebrow="Colección / promociones"
-            title="Promociones"
+            eyebrow="Colección / tendencias"
+            title="Tendencias"
             action={
-              <Link href="/galeria?type=packs" className={buttonVariants({ variant: "outline", size: "md" })}>
+              <Link href="/galeria?trending=1" className={buttonVariants({ variant: "outline", size: "md" })}>
                 Ver todos
               </Link>
             }
           />
-          <PromotionCarousel promotions={content.activePromotions} />
+          <FeaturedProductsCarousel products={content.trendingProducts} />
         </section>
       </div>
 

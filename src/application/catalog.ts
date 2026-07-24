@@ -212,17 +212,13 @@ function getFeaturedBoost(product: ProductItem) {
   return product.featured ? 250 : 0;
 }
 
-function getHybridFeaturedScore(product: ProductItem) {
-  return getPopularityScore(product) + getFeaturedBoost(product);
-}
-
 function hasRenderableImage(product: ProductItem) {
   return Boolean(product.image && product.image.trim());
 }
 
 function buildFeaturedProducts(products: ProductItem[], limit = 12) {
-  const publishedProducts = products.filter((item) => item.status === "published" && item.featured && hasRenderableImage(item));
-  const priorityFeatured = publishedProducts
+  const eligibleProducts = products.filter((item) => item.status === "published" && item.featured && hasRenderableImage(item));
+  const priorityFeatured = eligibleProducts
     .filter((item) => (item.featuredPriority ?? 0) > 0)
     .sort((left, right) => {
       const leftPriority = left.featuredPriority ?? 0;
@@ -230,22 +226,22 @@ function buildFeaturedProducts(products: ProductItem[], limit = 12) {
 
       return (
         leftPriority - rightPriority ||
-        getHybridFeaturedScore(right) - getHybridFeaturedScore(left) ||
+        getFeaturedBoost(right) - getFeaturedBoost(left) ||
         left.name.localeCompare(right.name, "es", { sensitivity: "base" })
       );
     });
 
   const priorityIds = new Set(priorityFeatured.map((item) => item.id));
-  const rankedPool = publishedProducts
+  const rankedPool = eligibleProducts
     .filter((item) => !priorityIds.has(item.id))
     .sort((left, right) => {
-      const scoreDelta = getHybridFeaturedScore(right) - getHybridFeaturedScore(left);
+      const scoreDelta = getPopularityScore(right) - getPopularityScore(left);
       if (scoreDelta !== 0) {
         return scoreDelta;
       }
 
       return left.name.localeCompare(right.name, "es", { sensitivity: "base" });
-  });
+    });
 
   const insertions = new Map<number, ProductItem[]>();
 
@@ -290,6 +286,20 @@ function buildFeaturedProducts(products: ProductItem[], limit = 12) {
   return result;
 }
 
+function buildTrendingProducts(products: ProductItem[], limit = 12) {
+  return products
+    .filter((item) => item.status === "published" && hasRenderableImage(item))
+    .sort((left, right) => {
+      const scoreDelta = getPopularityScore(right) - getPopularityScore(left);
+      if (scoreDelta !== 0) {
+        return scoreDelta;
+      }
+
+      return left.name.localeCompare(right.name, "es", { sensitivity: "base" });
+    })
+    .slice(0, limit);
+}
+
 export async function getDynamicHeaderMenus(): Promise<DynamicHeaderMenu[]> {
   const content = await getSiteContent();
   const activeBrands = content.brands.filter((brand) => brand.active !== false);
@@ -327,9 +337,7 @@ export async function getHomePageViewModel(): Promise<HomePageViewModel> {
     .sort((a, b) => a.order - b.order);
   const spotlightSlide = heroSlides.find((item) => item.homeSpotlight) ?? heroSlides[0] ?? null;
   const featuredProducts = buildFeaturedProducts(content.products, 12);
-  const trendingProducts = content.products
-    .filter((item) => item.status === "published" && item.trending)
-    .slice(0, 8);
+  const trendingProducts = buildTrendingProducts(content.products, 8);
   const activePromotions = [...(content.packs ?? [])]
     .filter((item) => item.active && item.items.length > 0)
     .sort((left, right) => (left.order ?? 0) - (right.order ?? 0) || left.title.localeCompare(right.title, "es", { sensitivity: "base" }));
@@ -376,22 +384,12 @@ export async function searchCatalog(filters: CatalogFilters = {}) {
 
 export async function getGalleryPageViewModel(filters: CatalogFilters = {}): Promise<GalleryPageViewModel> {
   const content = await getSiteContent();
-  const baseProducts = content.products.filter((product) => {
-    if (product.status !== "published") {
-      return false;
-    }
-
-    if (filters.featuredOnly && !product.featured) {
-      return false;
-    }
-
-    if (filters.trendingOnly && !product.trending) {
-      return false;
-    }
-
-    return true;
+  const baseProducts = content.products.filter((product) => product.status === "published");
+  const filteredProducts = filterCatalogProducts(baseProducts, {
+    ...filters,
+    trendingOnly: false,
   });
-  const publishedProducts = filterCatalogProducts(baseProducts);
+  const publishedProducts = filters.trendingOnly ? buildTrendingProducts(filteredProducts, filteredProducts.length) : filteredProducts;
   const activeBrandNames = new Set(content.brands.filter((brand) => brand.active !== false).map((brand) => normalizeText(brand.name)));
   const visibleCategoryNames = new Set((content.categories ?? []).filter((category) => category.visible).map((category) => normalizeText(category.name)));
   const brandFacetOptions = buildFacetOptions(publishedProducts, (product) => product.brand).filter((item) =>
@@ -402,7 +400,7 @@ export async function getGalleryPageViewModel(filters: CatalogFilters = {}): Pro
   );
 
   return {
-    products: filterCatalogProducts(baseProducts, filters),
+    products: filters.trendingOnly ? publishedProducts : filteredProducts,
     brands: brandFacetOptions,
     categories: categoryFacetOptions,
     activeBrand: filters.brand ? normalizeText(filters.brand) : "",
