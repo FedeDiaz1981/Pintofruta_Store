@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "hostinger:package": "node scripts/package-hostinger.mjs",
+    "hostinger:package:source": "node scripts/package-hostinger-source.mjs",
     "bootstrap:admin": "node scripts/bootstrap-admin-user.mjs",
     "start": "next start",
     "lint": "eslint",
