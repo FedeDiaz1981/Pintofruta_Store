@@ -43,6 +43,7 @@ export type SeedMeta = {
   active_modal_action: string | null;
   ping: boolean | null;
   next_ids: unknown | null;
+  order_notification_email: string | null;
 };
 
 export type SeedHeroSlide = {

@@ -37,6 +37,14 @@ async function countRows(client: PoolClient, table: string) {
 }
 
 async function cleanupLegacyCategories(client: PoolClient) {
+  const result = await client.query<{ count: string }>(
+    "select count(*)::text as count from categories where id <= 20 and deleted_at is null",
+  );
+
+  if (Number(result.rows[0]?.count ?? "0") === 0) {
+    return;
+  }
+
   await client.query(
     `
       update categories
@@ -132,8 +140,8 @@ async function seedIfNeeded(client: PoolClient) {
       `
         insert into site_content_meta (
           id, session_role, view_mode, active_admin_panel, panel_search_query,
-          active_modal_action, ping, next_ids
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+          active_modal_action, ping, next_ids, order_notification_email
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
       `,
       [
         1,
@@ -144,6 +152,7 @@ async function seedIfNeeded(client: PoolClient) {
         fallbackSiteContent.activeModalAction ?? null,
         fallbackSiteContent.ping ?? null,
         JSON.stringify(fallbackSiteContent.nextIds ?? null),
+        fallbackSiteContent.orderNotificationEmail ?? null,
       ],
     );
 
@@ -286,92 +295,49 @@ async function seedIfNeeded(client: PoolClient) {
   }
 }
 
-async function readRows<T extends QueryResultRow>(client: PoolClient, sql: string) {
+type Queryable = Pick<PoolClient, "query">;
+
+async function readRows<T extends QueryResultRow>(client: Queryable, sql: string) {
   const result = await client.query<T>(sql);
   return result.rows;
 }
 
-export async function getSiteContent(): Promise<SiteContentDocument> {
-  if (!postgresPool) {
+export const getSiteContent = cache(async (): Promise<SiteContentDocument> => {
+  const contentPool = postgresPool;
+
+  if (!contentPool) {
     return fallbackSiteContent;
   }
 
-  await ensureSchema();
+  const [metaRows, scopesRows, sectionsRows, groupsRows, itemsRows, heroSlidesRows, bannerRows, productRows, packRows, packItemRows, brandRows, categoryRows, userRows] =
+    await Promise.all([
+      readRows<SiteMetaRow>(contentPool, "select session_role, view_mode, active_admin_panel, panel_search_query, active_modal_action, ping, next_ids, order_notification_email from site_content_meta where id = 1 limit 1"),
+      readRows<SearchScopeRow>(contentPool, "select id, label, href, sort_order from header_search_scopes order by sort_order, id"),
+      readRows<NavSectionRow>(contentPool, "select id, label, icon, href, sort_order from header_sections order by sort_order, id"),
+      readRows<NavGroupRow>(contentPool, "select id, section_id, label, href, sort_order from header_groups order by sort_order, id"),
+      readRows<NavItemRow>(contentPool, "select id, group_id, label, href, sort_order from header_group_items order by sort_order, id"),
+      readRows<HeroSlideRow>(contentPool, "select id, order_index, title, subtitle, badge, image, image_mobile, link, active, home_spotlight from hero_slides order by order_index, id"),
+      readRows<BannerRow>(contentPool, "select id, text, order_index, active from banners order by order_index, id"),
+      readRows<ProductRow>(contentPool, "select id, sku, name, detail, presentation, category_id, category_name, category_ids, category_names, brand, vegano, kosher, testeado_en_animales, public_price, member_price, image, status, featured, featured_priority, trending, stock, views_count, sales_count, description, source_section, template_row_map, created_at, updated_at from products where deleted_at is null order by id"),
+      readRows<PackRow>(contentPool, "select id, apodo, title, description, category, public_price, image, active, featured, order_index, created_at, updated_at from promotion_packs order by order_index, id"),
+      readRows<PackItemRow>(contentPool, "select pack_id, product_id, quantity, order_index from promotion_pack_items order by order_index, pack_id, product_id"),
+      readRows<BrandRow>(contentPool, "select id, code, name, image, featured, active from brands order by featured desc, name"),
+      readRows<CategoryRow>(contentPool, "select id, name, slug, visible, home_menu, icon from categories where deleted_at is null order by id"),
+      readRows<UserRow>(contentPool, "select id, auth_user_id, name, email, role, can_see_prices, active from users order by id"),
+    ]);
 
-  const client = await postgresPool.connect();
+  const headerNavigation = mapHeaderNavigation(scopesRows, sectionsRows, groupsRows, itemsRows);
 
-  try {
-    await seedIfNeeded(client);
-    await cleanupLegacyCategories(client);
-
-    const metaRows = await readRows<SiteMetaRow>(
-      client,
-      "select session_role, view_mode, active_admin_panel, panel_search_query, active_modal_action, ping, next_ids from site_content_meta where id = 1 limit 1",
-    );
-    const scopesRows = await readRows<SearchScopeRow>(
-      client,
-      "select id, label, href, sort_order from header_search_scopes order by sort_order, id",
-    );
-    const sectionsRows = await readRows<NavSectionRow>(
-      client,
-      "select id, label, icon, href, sort_order from header_sections order by sort_order, id",
-    );
-    const groupsRows = await readRows<NavGroupRow>(
-      client,
-      "select id, section_id, label, href, sort_order from header_groups order by sort_order, id",
-    );
-    const itemsRows = await readRows<NavItemRow>(
-      client,
-      "select id, group_id, label, href, sort_order from header_group_items order by sort_order, id",
-    );
-    const heroSlidesRows = await readRows<HeroSlideRow>(
-      client,
-      "select id, order_index, title, subtitle, badge, image, image_mobile, link, active, home_spotlight from hero_slides order by order_index, id",
-    );
-    const bannerRows = await readRows<BannerRow>(
-      client,
-      "select id, text, order_index, active from banners order by order_index, id",
-    );
-    const productRows = await readRows<ProductRow>(
-      client,
-      "select id, sku, name, detail, presentation, category_id, category_name, category_ids, category_names, brand, vegano, kosher, testeado_en_animales, public_price, member_price, image, status, featured, featured_priority, trending, stock, views_count, sales_count, description, source_section, template_row_map, created_at, updated_at from products where deleted_at is null order by id",
-    );
-    const packRows = await readRows<PackRow>(
-      client,
-      "select id, apodo, title, description, category, public_price, image, active, featured, order_index, created_at, updated_at from promotion_packs order by order_index, id",
-    );
-    const packItemRows = await readRows<PackItemRow>(
-      client,
-      "select pack_id, product_id, quantity, order_index from promotion_pack_items order by order_index, pack_id, product_id",
-    );
-    const brandRows = await readRows<BrandRow>(
-      client,
-      "select id, code, name, image, featured, active from brands order by featured desc, name",
-    );
-    const categoryRows = await readRows<CategoryRow>(
-      client,
-      "select id, name, slug, visible, home_menu, icon from categories where deleted_at is null order by id",
-    );
-    const userRows = await readRows<UserRow>(
-      client,
-      "select id, auth_user_id, name, email, role, can_see_prices, active from users order by id",
-    );
-
-    const headerNavigation = mapHeaderNavigation(scopesRows, sectionsRows, groupsRows, itemsRows);
-
-    return mapSiteContentDocument({
-      metaRow: metaRows[0],
-      headerNavigation,
-      heroSlides: heroSlidesRows,
-      banners: bannerRows,
-      products: productRows,
-      packs: packRows,
-      packItems: packItemRows,
-      brands: brandRows,
-      categories: categoryRows,
-      users: userRows,
-    });
-  } finally {
-    client.release();
-  }
-}
+  return mapSiteContentDocument({
+    metaRow: metaRows[0],
+    headerNavigation,
+    heroSlides: heroSlidesRows,
+    banners: bannerRows,
+    products: productRows,
+    packs: packRows,
+    packItems: packItemRows,
+    brands: brandRows,
+    categories: categoryRows,
+    users: userRows,
+  });
+});

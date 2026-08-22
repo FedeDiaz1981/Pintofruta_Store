@@ -50,6 +50,7 @@ type UploadState = {
 };
 
 const sidebarSections: { title: string; keys: AdminTableKey[] }[] = [
+  { title: "Configuración", keys: ["site_content_meta"] },
   { title: "Listas", keys: ["products", "packs", "brands", "categories", "users"] },
   { title: "Contenido", keys: ["hero_slides", "banners"] },
 ];
@@ -268,6 +269,10 @@ function parseTemplateRowMap(value: unknown): TemplateRowMap {
 
 function serializeTemplateRowMap(values: TemplateRowMap) {
   return JSON.stringify(values);
+}
+
+function getSidebarSectionTitle(tableKey: AdminTableKey) {
+  return sidebarSections.find((section) => section.keys.includes(tableKey))?.title ?? "Datos";
 }
 
 async function uploadAdminImage(file: File, scope: string, fallbackName: string) {
@@ -643,6 +648,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
     () => tables.find((table) => table.key === selectedTableKey) ?? tables[0],
     [selectedTableKey, tables],
   );
+  const selectedSectionTitle = useMemo(() => getSidebarSectionTitle(selectedTable.key), [selectedTable.key]);
 
   const selectedRows = useMemo(() => (selectedTable?.rows as Record<string, unknown>[]) ?? [], [selectedTable]);
   const fieldMap = useMemo(
@@ -914,7 +920,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
               </label>
 
               <div className="flex flex-wrap gap-3">
-                {selectedRowIds.length > 0 ? (
+                {selectedTable.key !== "site_content_meta" && selectedRowIds.length > 0 ? (
                   <button
                     type="button"
                     onClick={handleBulkDelete}
@@ -930,10 +936,20 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
 
                 <button
                   type="button"
-                  onClick={() => openNew(selectedTable)}
+                  onClick={() => {
+                    if (selectedTable.key === "site_content_meta") {
+                      const metaRow = (selectedRows[0] as Record<string, unknown> | undefined) ?? null;
+                      if (metaRow) {
+                        openEdit(selectedTable, metaRow);
+                        return;
+                      }
+                    }
+
+                    openNew(selectedTable);
+                  }}
                   className="inline-flex h-14 items-center justify-center rounded-full bg-[linear-gradient(180deg,var(--pf-primary-soft)_0%,var(--pf-primary)_100%)] px-6 text-sm font-black text-white shadow-[0_14px_30px_rgba(168,109,69,0.22)] transition hover:brightness-105"
                 >
-                  {getCreateLabel(selectedTable)}
+                  {selectedTable.key === "site_content_meta" ? "Editar configuración" : getCreateLabel(selectedTable)}
                 </button>
               </div>
 
@@ -950,7 +966,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                   <div>
                     <p className="text-[11px] font-black uppercase tracking-[0.34em] text-[var(--pf-secondary)]">
-                      Contenido / {selectedTable.label}
+                      {selectedSectionTitle} / {selectedTable.label}
                     </p>
                     <h2 className="mt-2 text-3xl font-black tracking-tight text-[var(--pf-text)]">Listado de registros</h2>
                   </div>
@@ -1073,13 +1089,15 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                                     Editar
                                   </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleQuickDelete(selectedTable, row)}
-                                    className="rounded-full border border-[rgba(111,69,40,0.18)] bg-[var(--pf-primary-darker)] px-4 py-2 text-xs font-bold text-white transition hover:brightness-105"
-                                  >
-                                    Borrar
-                                  </button>
+                                  {selectedTable.key !== "site_content_meta" ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleQuickDelete(selectedTable, row)}
+                                      className="rounded-full border border-[rgba(111,69,40,0.18)] bg-[var(--pf-primary-darker)] px-4 py-2 text-xs font-bold text-white transition hover:brightness-105"
+                                    >
+                                      Borrar
+                                    </button>
+                                  ) : null}
                                 </div>
                               </td>
                             </tr>
@@ -1209,7 +1227,12 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
 
                   if (field.kind === "pack_products") {
                     return (
-                      <div key={field.key} className={`block ${fullWidth ? "md:col-span-2" : ""}`}>
+                      <div
+                        key={field.key}
+                        id={`admin-file-field-${selectedTable.key}-${field.key}`}
+                        data-testid={`admin-file-field-${selectedTable.key}-${field.key}`}
+                        className={`block ${fullWidth ? "md:col-span-2" : ""}`}
+                      >
                         <div className="mb-2 flex items-center justify-between gap-3">
                           <span className="text-[11px] font-black uppercase tracking-[0.28em] text-[var(--pf-muted)]">
                             {field.label}
@@ -1621,6 +1644,8 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                             </div>
 
                             <input
+                              id={`admin-file-input-${selectedTable.key}-${field.key}`}
+                              data-testid={`admin-file-input-${selectedTable.key}-${field.key}`}
                               type="file"
                               accept="image/*"
                               className="sr-only"

@@ -135,6 +135,7 @@ export interface SiteContentDocument {
   activeAdminPanel?: string;
   panelSearchQuery?: string;
   activeModalAction?: string;
+  orderNotificationEmail?: string;
   headerNavigation?: HeaderNavigation;
   heroSlides: HeroSlide[];
   banners: BannerItem[];

@@ -73,6 +73,7 @@ export interface AdminCrudViewModel {
 }
 
 const tableOrder: AdminTableKey[] = [
+  "site_content_meta",
   "products",
   "packs",
   "brands",
@@ -158,6 +159,10 @@ function multiselectField(
 }
 
 export function getAdminTableDefinitions(content: SiteContentDocument): AdminTableDefinition[] {
+  const siteMetaRow = {
+    id: 1,
+    order_notification_email: content.orderNotificationEmail ?? "",
+  };
   const packRows = (content.packs ?? []).map((pack) => ({
     ...pack,
     items_count: pack.items.length,
@@ -185,6 +190,24 @@ export function getAdminTableDefinitions(content: SiteContentDocument): AdminTab
     }));
 
   return [
+    {
+      key: "site_content_meta",
+      label: "Configuración",
+      description: "Preferencias generales y correo de destino para pedidos.",
+      idField: "id",
+      rowLabelField: "order_notification_email",
+      rows: [siteMetaRow],
+      columns: [{ key: "order_notification_email", label: "Correo de destino" }],
+      fields: [
+        numberField("id", "ID", true, "Uso interno", true, true),
+        textField(
+          "order_notification_email",
+          "Correo de destino",
+          false,
+          "Se usará para recibir por mail el Excel del pedido cuando el cliente lo confirme.",
+        ),
+      ],
+    },
     {
       key: "products",
       label: "Productos",

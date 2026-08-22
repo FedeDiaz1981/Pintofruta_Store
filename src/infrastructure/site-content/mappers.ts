@@ -203,6 +203,7 @@ export function mapSiteContentDocument(params: {
     activeAdminPanel: metaRow?.active_admin_panel ?? undefined,
     panelSearchQuery: metaRow?.panel_search_query ?? undefined,
     activeModalAction: metaRow?.active_modal_action ?? undefined,
+    orderNotificationEmail: metaRow?.order_notification_email ?? undefined,
     headerNavigation,
     heroSlides: heroSlides.map((slide) => ({
       id: slide.id,

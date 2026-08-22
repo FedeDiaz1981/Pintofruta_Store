@@ -8,8 +8,11 @@ export const siteContentSchemaSql = `
     active_modal_action text,
     ping boolean,
     next_ids jsonb,
+    order_notification_email text,
     updated_at timestamptz not null default now()
   );
+
+  alter table site_content_meta add column if not exists order_notification_email text;
 
   create table if not exists header_search_scopes (
     id text primary key,

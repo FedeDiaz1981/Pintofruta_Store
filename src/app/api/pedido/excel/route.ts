@@ -2,6 +2,7 @@ import { appendFileSync } from "node:fs";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import type { OrderExcelRequestItem } from "@/lib/order-excel";
+import { sendOrderExcelByEmail } from "@/lib/order-email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -146,17 +147,39 @@ async function handleExcelExport(request: Request) {
   const { buildOrderExcelFile } = await import("@/lib/order-excel");
   trace("import:order-excel:done");
 
-  const payload = new URL(request.url).searchParams.get("payload");
-  trace("request:payload", { hasPayload: Boolean(payload), length: payload?.length ?? 0 });
+  const body = await readRequestBody(request);
+  trace("request:body", {
+    hasPayload: Boolean(body?.payload),
+    hasItems: Array.isArray(body?.items),
+    hasCustomerDetails: Boolean(body?.customerDetails),
+  });
 
-  if (!payload) {
-    trace("request:missing-payload");
+  if (!body) {
+    trace("request:missing-body");
     return NextResponse.json({ error: "Falta el pedido codificado en la URL." }, { status: 400 });
   }
 
-  let body: { items?: OrderExcelRequestItem[] };
+  let parsedBody: {
+    items?: OrderExcelRequestItem[];
+    customerDetails?: {
+      name?: string;
+      cuit?: string;
+      address?: string;
+      postalCode?: string;
+      schedule?: string;
+      phone?: string;
+    };
+  };
   try {
-    body = JSON.parse(payload) as { items?: OrderExcelRequestItem[] };
+    if (typeof body.payload === "string" && body.payload.trim()) {
+      const payloadBody = JSON.parse(body.payload) as { items?: OrderExcelRequestItem[] };
+      parsedBody = {
+        items: payloadBody.items,
+        customerDetails: body.customerDetails,
+      };
+    } else {
+      parsedBody = { items: body.items ?? [], customerDetails: body.customerDetails };
+    }
     trace("request:parse:done");
   } catch (error) {
     trace("request:parse:error", {
@@ -165,7 +188,7 @@ async function handleExcelExport(request: Request) {
     return NextResponse.json({ error: "El pedido debe enviarse en formato JSON valido." }, { status: 400 });
   }
 
-  const items = Array.isArray(body.items) ? body.items : [];
+  const items = Array.isArray(parsedBody.items) ? parsedBody.items : [];
   console.info("[pedido/excel] request:start", {
     items: items.length,
     firstItem: items[0]
@@ -218,24 +241,112 @@ async function handleExcelExport(request: Request) {
     },
   });
 
+  try {
+    const mailResult = await sendOrderExcelByEmail({
+      fileName: exportResult.fileName,
+      buffer: exportResult.buffer,
+      itemCount: exportResult.lines.length,
+      viewerName: viewer?.name ?? null,
+      viewerEmail: viewer?.email ?? null,
+      audience: exportResult.audience,
+      customerDetails: parsedBody.customerDetails,
+    });
+
+    if (!mailResult.sent) {
+      trace("email:skipped", mailResult);
+      return new NextResponse(exportResult.buffer, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="${exportResult.fileName}"`,
+          "Cache-Control": "no-store",
+          "X-Email-Sent": "false",
+          "X-Email-Error": encodeURIComponent(mailResult.reason || "No se pudo enviar el pedido por mail."),
+          "X-File-Name": exportResult.fileName,
+        },
+      });
+    }
+
+    console.info("[pedido/excel] email:sent", mailResult);
+    trace("email:sent", mailResult);
+  } catch (error) {
+    console.warn("[pedido/excel] email:error", error);
+    trace("email:error", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+
+    return new NextResponse(exportResult.buffer, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${exportResult.fileName}"`,
+        "Cache-Control": "no-store",
+        "X-Email-Sent": "false",
+        "X-Email-Error": encodeURIComponent(
+          error instanceof Error ? error.message : "No se pudo enviar el pedido por mail.",
+        ),
+        "X-File-Name": exportResult.fileName,
+      },
+    });
+  }
+
   console.info("[pedido/excel] response:ready", {
     fileName: exportResult.fileName,
     usedTemplate: exportResult.usedTemplate,
     lines: exportResult.lines.length,
-    bufferSize: exportResult.buffer.length,
   });
   trace("response:ready", {
     fileName: exportResult.fileName,
     usedTemplate: exportResult.usedTemplate,
     lines: exportResult.lines.length,
-    bufferSize: exportResult.buffer.length,
   });
 
-  return new NextResponse(exportResult.buffer, {
+  return NextResponse.json({
+    ok: true,
+    fileName: exportResult.fileName,
+    usedTemplate: exportResult.usedTemplate,
+    lines: exportResult.lines.length,
+  }, {
     headers: {
-      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="${exportResult.fileName}"`,
-      "Cache-Control": "no-store",
+      "X-Email-Sent": "true",
+      "X-File-Name": exportResult.fileName,
     },
   });
+}
+
+async function readRequestBody(request: Request): Promise<{
+  payload?: string;
+  items?: OrderExcelRequestItem[];
+  customerDetails?: {
+    name?: string;
+    cuit?: string;
+    address?: string;
+    postalCode?: string;
+    schedule?: string;
+    phone?: string;
+  };
+} | null> {
+  const method = request.method.toUpperCase();
+
+  if (method === "POST") {
+    try {
+      return (await request.json()) as {
+        payload?: string;
+        items?: OrderExcelRequestItem[];
+        customerDetails?: {
+          name?: string;
+          cuit?: string;
+          address?: string;
+          postalCode?: string;
+          schedule?: string;
+          phone?: string;
+        };
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  const payload = new URL(request.url).searchParams.get("payload");
+  return payload ? { payload } : null;
 }

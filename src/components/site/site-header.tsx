@@ -3,7 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Search, UserRound } from "lucide-react";
-import { useCallback, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 
 import type { DynamicHeaderMenu } from "@/application/catalog";
 import { AuthModal } from "@/components/auth/auth-modal";
@@ -21,6 +22,7 @@ export function SiteHeader({ menus }: SiteHeaderProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
   const viewer = useViewer();
+  const router = useRouter();
 
   const openAuthModal = useCallback(() => {
     window.dispatchEvent(new Event("pf-auth-modal:open"));
@@ -30,19 +32,42 @@ export function SiteHeader({ menus }: SiteHeaderProps) {
     setOpenMenuKey(null);
   }, []);
 
+  useEffect(() => {
+    const pathsToPrefetch = ["/", "/galeria", "/busqueda"];
+
+    if (viewer?.isAdmin) {
+      pathsToPrefetch.push("/admin");
+    }
+
+    for (const menu of menus) {
+      pathsToPrefetch.push(menu.href);
+      for (const group of menu.groups) {
+        for (const bucket of group.itemsByInitial) {
+          for (const item of bucket.items) {
+            pathsToPrefetch.push(item.href);
+          }
+        }
+      }
+    }
+
+    for (const href of pathsToPrefetch) {
+      router.prefetch(href);
+    }
+  }, [menus, router, viewer?.isAdmin]);
+
   const submitSearch = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       const normalized = searchInputRef.current?.value.trim() ?? "";
-      window.location.assign(normalized ? `/busqueda?q=${encodeURIComponent(normalized)}` : "/galeria");
+      router.push(normalized ? `/busqueda?q=${encodeURIComponent(normalized)}` : "/galeria");
     },
-    [],
+    [router],
   );
 
   const submitSearchDirect = useCallback(() => {
     const normalized = searchInputRef.current?.value.trim() ?? "";
-    window.location.assign(normalized ? `/busqueda?q=${encodeURIComponent(normalized)}` : "/galeria");
-  }, []);
+    router.push(normalized ? `/busqueda?q=${encodeURIComponent(normalized)}` : "/galeria");
+  }, [router]);
 
   return (
     <>

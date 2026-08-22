@@ -812,12 +812,34 @@ async function saveHeaderGroupItem(record: PayloadRecord) {
 }
 
 async function saveMeta(record: PayloadRecord) {
+  const existingResult = await postgresPool!.query<{
+    session_role: string | null;
+    view_mode: string | null;
+    active_admin_panel: string | null;
+    panel_search_query: string | null;
+    active_modal_action: string | null;
+    ping: boolean | null;
+    next_ids: unknown;
+    order_notification_email: string | null;
+  }>(
+    "select session_role, view_mode, active_admin_panel, panel_search_query, active_modal_action, ping, next_ids, order_notification_email from site_content_meta where id = 1 limit 1",
+  );
+  const existing = existingResult.rows[0];
+  const sessionRole = toStringValue(record.session_role) || existing?.session_role || null;
+  const viewMode = toStringValue(record.view_mode) || existing?.view_mode || null;
+  const activeAdminPanel = toStringValue(record.active_admin_panel) || existing?.active_admin_panel || null;
+  const panelSearchQuery = toStringValue(record.panel_search_query) || existing?.panel_search_query || null;
+  const activeModalAction = toStringValue(record.active_modal_action) || existing?.active_modal_action || null;
+  const ping = record.ping == null || record.ping === "" ? Boolean(existing?.ping) : toBoolean(record.ping);
+  const nextIds = toStringValue(record.next_ids) || JSON.stringify(existing?.next_ids ?? {}) || "{}";
+  const orderNotificationEmail = toStringValue(record.order_notification_email) || existing?.order_notification_email || null;
+
   await postgresPool!.query(
     `
       insert into site_content_meta (
         id, session_role, view_mode, active_admin_panel, panel_search_query,
-        active_modal_action, ping, next_ids
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+        active_modal_action, ping, next_ids, order_notification_email
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)
       on conflict (id) do update set
         session_role = excluded.session_role,
         view_mode = excluded.view_mode,
@@ -825,17 +847,20 @@ async function saveMeta(record: PayloadRecord) {
         panel_search_query = excluded.panel_search_query,
         active_modal_action = excluded.active_modal_action,
         ping = excluded.ping,
-        next_ids = excluded.next_ids
+        next_ids = excluded.next_ids,
+        order_notification_email = excluded.order_notification_email,
+        updated_at = now()
     `,
     [
       1,
-      toStringValue(record.session_role) || null,
-      toStringValue(record.view_mode) || null,
-      toStringValue(record.active_admin_panel) || null,
-      toStringValue(record.panel_search_query) || null,
-      toStringValue(record.active_modal_action) || null,
-      toBoolean(record.ping),
-      toStringValue(record.next_ids) || "{}",
+      sessionRole,
+      viewMode,
+      activeAdminPanel,
+      panelSearchQuery,
+      activeModalAction,
+      ping,
+      nextIds,
+      orderNotificationEmail,
     ],
   );
 }

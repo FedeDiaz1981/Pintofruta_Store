@@ -86,7 +86,7 @@ export function PackDetailModal({
           }
         }}
       >
-        <div className="modal-box max-w-6xl overflow-hidden rounded-[2rem] border border-[var(--pf-border-warm)] bg-[var(--pf-surface)] p-0 text-[var(--pf-text)] shadow-[0_30px_80px_rgba(74,57,38,0.26)]">
+        <div className="modal-box max-w-6xl overflow-hidden rounded-[2rem] border border-[var(--pf-border-warm)] bg-[var(--pf-surface)] p-0 pb-[calc(5.5rem+env(safe-area-inset-bottom))] text-[var(--pf-text)] shadow-[0_30px_80px_rgba(74,57,38,0.26)] sm:pb-0">
           {pack ? (
             <div className="grid gap-0 lg:grid-cols-[1fr_1.05fr]">
               <div className="relative min-h-[320px] bg-[linear-gradient(180deg,rgba(238,230,214,0.95),rgba(248,244,236,0.98))] p-6 sm:min-h-[420px] sm:p-8">
@@ -102,7 +102,7 @@ export function PackDetailModal({
                 </div>
               </div>
 
-              <div className="flex flex-col gap-5 p-6 sm:p-8">
+              <div className="flex flex-col gap-5 p-6 pb-[calc(6.5rem+env(safe-area-inset-bottom))] sm:p-8 sm:pb-8">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-[11px] font-black uppercase tracking-[0.32em] text-[var(--pf-secondary-dark)]">Promoción</p>

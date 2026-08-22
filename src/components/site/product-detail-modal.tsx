@@ -146,7 +146,7 @@ export function ProductDetailModal({
         }
       }}
     >
-      <div className="modal-box max-h-[calc(100dvh-1rem)] max-w-6xl overflow-y-auto overscroll-contain rounded-[2rem] border border-[var(--pf-border-warm)] bg-[var(--pf-surface)] p-0 text-[var(--pf-text)] shadow-[0_30px_80px_rgba(74,57,38,0.26)] sm:max-h-[calc(100dvh-2rem)]">
+      <div className="modal-box max-h-[calc(100dvh-1rem)] max-w-6xl overflow-y-auto overscroll-contain rounded-[2rem] border border-[var(--pf-border-warm)] bg-[var(--pf-surface)] p-0 pb-[calc(5.5rem+env(safe-area-inset-bottom))] text-[var(--pf-text)] shadow-[0_30px_80px_rgba(74,57,38,0.26)] sm:max-h-[calc(100dvh-2rem)] sm:pb-0">
         {product ? (
           <div className="grid gap-0 lg:grid-cols-[1.08fr_0.92fr]">
             <div className="relative min-h-[280px] bg-[linear-gradient(180deg,rgba(238,230,214,0.95),rgba(248,244,236,0.98))] p-3 sm:min-h-[480px] sm:p-6 lg:p-8">
@@ -162,7 +162,7 @@ export function ProductDetailModal({
               </div>
             </div>
 
-            <div className="flex min-h-0 flex-col gap-5 p-4 sm:p-8">
+            <div className="flex min-h-0 flex-col gap-5 p-4 pb-[calc(6.5rem+env(safe-area-inset-bottom))] sm:p-8 sm:pb-8">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h3 className="text-2xl font-extrabold tracking-tight text-[var(--pf-text)] sm:text-5xl">{product.name}</h3>
