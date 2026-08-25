@@ -39,7 +39,7 @@ export default async function HomePage() {
         <SpotlightBanner slide={content.spotlightSlide} />
       </div>
 
-      <section className="w-full bg-[linear-gradient(180deg,var(--pf-surface-warm)_0%,var(--pf-sand-soft)_48%,var(--pf-surface-strong)_100%)] py-10 sm:py-12 lg:py-14">
+      <section className="mt-10 w-full bg-[linear-gradient(180deg,var(--pf-surface-warm)_0%,var(--pf-sand-soft)_48%,var(--pf-surface-strong)_100%)] py-10 sm:mt-12 sm:py-12 lg:mt-14 lg:py-14">
         <div className="pf-shell px-4 sm:px-6 lg:px-12">
           <div className="space-y-5">
             <SectionHeading eyebrow="Identidad" title="Marcas destacadas" />
@@ -79,21 +79,29 @@ export default async function HomePage() {
                 </h2>
                 <div className="mt-4 space-y-3 text-[0.92rem] leading-6 text-[var(--pf-muted)] sm:text-[0.98rem]">
                   <p>
-                    Somos un equipo de profesionales con foco en alimentos saludables, abastecimiento ordenado y una experiencia de compra
-                    simple. Nacimos trabajando con propuestas plant based y, con el tiempo, ampliamos la oferta para acompanar el crecimiento
-                    del canal natural, las dieteticas y los consumidores que buscan variedad y confianza.
+                    Somos un equipo de profesionales comprometidos con una alimentación más saludable, un abastecimiento ordenado y una experiencia
+                    de compra simple.
                   </p>
                   <p>
-                    Con la experiencia acumulada fuimos construyendo una operacion capaz de reunir marcas lideres, pequenos productores y
-                    soluciones de logistica que permiten llegar con franjas horarias claras, stock controlado y atencion personalizada.
+                    Comenzamos este camino buscando productos naturales, orgánicos y sin conservantes, en un momento en el que encontrar este tipo
+                    de propuestas no era sencillo. Con el crecimiento de la demanda, también fuimos creciendo nosotros: ampliamos nuestra oferta
+                    incorporando productos sin TACC, veganos, sin azúcar, crudos, kosher, proteicos y keto, entre otras alternativas.
+                  </p>
+                  <p>
+                    Hoy acompañamos a dietéticas, clubes, kioscos, escuelas y otros comercios e instituciones, ofreciendo una amplia variedad de
+                    productos y construyendo relaciones basadas en la confianza, la calidad y un servicio cercano.
+                  </p>
+                  <p>
+                    Con la experiencia acumulada fuimos construyendo una operación capaz de reunir marcas líderes, pequeños productores y
+                    soluciones de logística que permiten llegar con franjas horarias claras, stock controlado y atención personalizada.
                   </p>
                 </div>
               </div>
 
               <div className="mt-4 rounded-[1.25rem] border border-[rgba(212,189,156,0.55)] bg-[rgba(237,220,195,0.55)] px-4 py-3 text-[0.88rem] leading-6 text-[var(--pf-text)] sm:text-[0.95rem]">
                 <strong className="font-semibold text-[var(--pf-primary-darker)]">Creemos en relaciones de largo plazo:</strong>{" "}
-                cada pedido, cada consulta y cada entrega forman parte de una misma idea, hacer que comprar saludable sea mas facil, mas
-                ordenado y mas confiable.
+                cada pedido, cada consulta y cada entrega forman parte de una misma idea: hacer que comprar saludable sea más fácil, más
+                ordenado y más confiable.
               </div>
 
               <div className="mt-4 border-t border-[rgba(212,189,156,0.4)] pt-3 text-[0.85rem] leading-6 text-[var(--pf-muted)]">

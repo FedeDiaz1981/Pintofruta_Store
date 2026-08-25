@@ -42,7 +42,7 @@ function MobileBrandRail({ brands }: { brands: BrandItem[] }) {
                           src={publicAsset(brand.image)}
                           alt={brand.name}
                           fill
-                          className="object-cover"
+                          className="object-contain p-4"
                           sizes="50vw"
                           priority={pageIndex === 0}
                         />
@@ -64,7 +64,7 @@ function MobileBrandRail({ brands }: { brands: BrandItem[] }) {
 }
 
 export function BrandLogoWall({ brands }: { brands: BrandItem[] }) {
-  const visibleBrands = brands.filter((brand) => brand.active !== false);
+  const visibleBrands = brands.filter((brand) => brand.active !== false && brand.featured && Boolean(brand.image));
 
   const sortedBrands = useMemo(
     () => [...visibleBrands].sort((left, right) => left.name.localeCompare(right.name, "es", { sensitivity: "base" })),
@@ -94,7 +94,7 @@ export function BrandLogoWall({ brands }: { brands: BrandItem[] }) {
                   src={publicAsset(brand.image)}
                   alt={brand.name}
                   fill
-                  className="object-cover transition duration-300 group-hover:scale-[1.02]"
+                  className="object-contain p-4 transition duration-300 group-hover:scale-[1.01]"
                   sizes="(max-width: 768px) 50vw, 16vw"
                 />
               ) : (

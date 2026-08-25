@@ -45,7 +45,7 @@ function MobileHeroCarousel({ slides, visibleIndex }: { slides: HeroSlide[]; vis
                       <img
                         src={publicAsset(slide.image)}
                         alt={slide.title}
-                        className="h-full w-full object-cover object-center"
+                        className="h-full w-full object-cover object-right"
                         loading={index === 0 ? "eager" : "lazy"}
                         fetchPriority={index === 0 ? "high" : "auto"}
                       />
@@ -170,87 +170,91 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
     <>
       <MobileHeroCarousel slides={orderedSlides} visibleIndex={visibleIndex} />
 
-      <section ref={desktopHeroRef} className="relative hidden w-full overflow-hidden bg-[var(--pf-surface)] md:block">
-        <div className="relative h-[clamp(306px,49vw,544px)] w-full overflow-hidden">
-          {orderedSlides.map((slide, index) => {
-            const active = index === visibleIndex;
+      <section ref={desktopHeroRef} className="relative hidden w-full bg-transparent md:block">
+        <div className="pf-shell px-4 sm:px-6 lg:px-12">
+          <div className="relative overflow-visible bg-[var(--pf-surface)]">
+            <div className="relative grid h-[clamp(306px,49vw,544px)] w-full grid-cols-[3fr_2fr] overflow-hidden">
+            {orderedSlides.map((slide, index) => {
+              const active = index === visibleIndex;
 
-            return (
-              <div
-                key={slide.id}
-                className={`absolute inset-0 transition-opacity duration-700 ease-out ${active ? "opacity-100" : "pointer-events-none opacity-0"}`}
-                aria-hidden={!active}
-              >
-                <picture className="absolute inset-0 block h-full w-full">
-                  {slide.imageMobile ? <source media="(max-width: 767px)" srcSet={publicAsset(slide.imageMobile)} /> : null}
-                  <img
-                    src={publicAsset(slide.image)}
-                    alt={slide.title}
-                    className="h-full w-full object-cover object-center"
-                    loading={index === 0 ? "eager" : "lazy"}
-                    fetchPriority={index === 0 ? "high" : "auto"}
-                  />
-                </picture>
-
-                <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(248,242,232,0.96)_0%,rgba(248,242,232,0.84)_28%,rgba(248,242,232,0.30)_52%,rgba(248,242,232,0.08)_100%)]" />
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_right_center,rgba(74,57,38,0.18),transparent_40%)]" />
-
-                <div className="relative z-10 flex h-full items-center">
-                  <div className="pf-shell px-4 sm:px-6 lg:px-12">
-                    <div className="max-w-2xl py-10 sm:py-14 lg:py-16">
-                      <span className="inline-flex rounded-full bg-secondary/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-secondary">
-                        {slide.badge}
-                      </span>
-                      <h1 className="mt-5 text-4xl font-extrabold tracking-tight text-base-content sm:text-6xl">{slide.title}</h1>
-                      <p className="mt-4 max-w-xl text-lg leading-8 text-base-content/78">{slide.subtitle}</p>
-                      <div className="mt-8 flex flex-wrap gap-3">
-                        <Link href={resolveHref(slide.link)} className={`${buttonVariants({ variant: "primary", size: "lg" })} !text-white`}>
-                          Ir a la galería
-                        </Link>
+              return (
+                <div
+                  key={slide.id}
+                  className={`absolute inset-0 grid grid-cols-[3fr_2fr] transition-opacity duration-700 ease-out ${active ? "opacity-100" : "pointer-events-none opacity-0"}`}
+                  aria-hidden={!active}
+                >
+                  <div className="relative flex h-full items-center overflow-hidden bg-[linear-gradient(90deg,rgba(248,242,232,0.98)_0%,rgba(248,242,232,0.92)_100%)]">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_left_center,rgba(74,57,38,0.08),transparent_54%)]" />
+                    <div className="relative z-10 px-4 sm:px-6 lg:pl-[20%] lg:pr-12">
+                      <div className="max-w-2xl py-10 sm:py-14 lg:py-16">
+                        <span className="inline-flex rounded-full bg-secondary/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-secondary">
+                          {slide.badge}
+                        </span>
+                        <h1 className="mt-5 text-4xl font-extrabold tracking-tight text-base-content sm:text-6xl">{slide.title}</h1>
+                        <p className="mt-4 max-w-xl text-lg leading-8 text-base-content/78">{slide.subtitle}</p>
+                        <div className="mt-8 flex flex-wrap gap-3">
+                          <Link href={resolveHref(slide.link)} className={`${buttonVariants({ variant: "primary", size: "lg" })} !text-white`}>
+                            Ir a la galería
+                          </Link>
+                        </div>
                       </div>
                     </div>
                   </div>
+
+                  <div className="relative flex items-center justify-end overflow-hidden bg-[linear-gradient(180deg,rgba(248,242,232,0.98)_0%,rgba(248,242,232,0.94)_100%)]">
+                    <picture className="block h-full w-full">
+                      {slide.imageMobile ? <source media="(max-width: 767px)" srcSet={publicAsset(slide.imageMobile)} /> : null}
+                      <img
+                        src={publicAsset(slide.image)}
+                        alt={slide.title}
+                        className="h-full w-full object-contain object-right"
+                        loading={index === 0 ? "eager" : "lazy"}
+                        fetchPriority={index === 0 ? "high" : "auto"}
+                      />
+                    </picture>
+                  </div>
                 </div>
+              );
+            })}
+
+            {orderedSlides.length > 1 ? (
+              <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 gap-2">
+                {orderedSlides.map((slide, index) => (
+                  <button
+                    key={slide.id}
+                    type="button"
+                    data-hero-slide-index={index}
+                    aria-label={`Ir al banner ${index + 1}`}
+                    className={`h-2.5 rounded-full transition-all ${index === visibleIndex ? "w-8 bg-[var(--pf-primary-darker)]" : "w-2.5 bg-[rgba(74,57,38,0.28)]"}`}
+                  />
+                ))}
               </div>
-            );
-          })}
-
-          {orderedSlides.length > 1 ? (
-            <>
-              <Button
-                type="button"
-                variant="secondary"
-                size="icon"
-                className="absolute left-4 top-1/2 z-20 -translate-y-1/2 shadow-[0_12px_24px_rgba(74,57,38,0.16)]"
-                aria-label="Banner anterior"
-              >
-                <ChevronLeft className="size-6" />
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="icon"
-                className="absolute right-4 top-1/2 z-20 -translate-y-1/2 shadow-[0_12px_24px_rgba(74,57,38,0.16)]"
-                aria-label="Banner siguiente"
-              >
-                <ChevronRight className="size-6" />
-              </Button>
-            </>
-          ) : null}
-
-          {orderedSlides.length > 1 ? (
-            <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 gap-2">
-              {orderedSlides.map((slide, index) => (
-                <button
-                  key={slide.id}
-                  type="button"
-                  data-hero-slide-index={index}
-                  aria-label={`Ir al banner ${index + 1}`}
-                  className={`h-2.5 rounded-full transition-all ${index === visibleIndex ? "w-8 bg-[var(--pf-primary-darker)]" : "w-2.5 bg-[rgba(74,57,38,0.28)]"}`}
-                />
-              ))}
+            ) : null}
             </div>
-          ) : null}
+
+            {orderedSlides.length > 1 ? (
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="absolute left-[-1.5rem] top-1/2 z-30 grid h-16 w-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/70 bg-white/88 shadow-[0_16px_40px_rgba(74,57,38,0.18)] backdrop-blur-xl transition duration-200 hover:-translate-y-1/2 hover:scale-[1.05] hover:bg-white/95"
+                  aria-label="Banner anterior"
+                >
+                  <ChevronLeft className="size-8" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="absolute right-[-1.5rem] top-1/2 z-30 grid h-16 w-16 translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/70 bg-white/88 shadow-[0_16px_40px_rgba(74,57,38,0.18)] backdrop-blur-xl transition duration-200 hover:-translate-y-1/2 hover:scale-[1.05] hover:bg-white/95"
+                  aria-label="Banner siguiente"
+                >
+                  <ChevronRight className="size-8" />
+                </Button>
+              </>
+            ) : null}
+          </div>
         </div>
       </section>
     </>

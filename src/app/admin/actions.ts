@@ -11,6 +11,8 @@ import type { PoolClient } from "pg";
 
 type PayloadRecord = Record<string, string | number | boolean | null | undefined>;
 
+const CLEAR_IMAGE_VALUE = "__pf_clear_image__";
+
 function adminLog(stage: string, details: Record<string, unknown> = {}) {
   console.info(`[admin-action] ${stage}`, details);
 }
@@ -46,6 +48,20 @@ function toStringValue(value: unknown) {
   }
 
   return String(value).trim();
+}
+
+function resolveFileValue(value: unknown, existingValue: string | null = null) {
+  const normalized = toStringValue(value);
+
+  if (normalized === CLEAR_IMAGE_VALUE) {
+    return null;
+  }
+
+  if (normalized) {
+    return normalized;
+  }
+
+  return existingValue;
 }
 
 function slugify(value: string) {
@@ -135,10 +151,6 @@ function parseTemplateRowMap(value: unknown) {
 
 function generateSku(id: number) {
   return `PF${String(id).padStart(4, "0")}`;
-}
-
-function isFileValue(value: unknown): value is File {
-  return typeof File !== "undefined" && value instanceof File;
 }
 
 function isTransientConnectionError(error: unknown) {
@@ -270,7 +282,7 @@ async function saveProduct(record: PayloadRecord) {
       ? String(existing?.status ?? "").toLowerCase() !== "inactive"
       : toBoolean(record.active);
   const status = active ? "published" : "inactive";
-  const image = toStringValue(record.image) || existing?.image || null;
+  const image = resolveFileValue(record.image, existing?.image ?? null);
   const featuredPriority =
     record.featuredPriority == null || record.featuredPriority === ""
       ? existing?.featured_priority ?? null
@@ -362,7 +374,10 @@ async function saveBrand(record: PayloadRecord) {
     [id],
   );
   const existing = existingResult.rows[0];
-  const featured = existing?.featured ?? false;
+  const featured =
+    record.featured == null || record.featured === ""
+      ? existing?.featured ?? false
+      : toBoolean(record.featured);
   await postgresPool!.query(
     `
       insert into brands (id, code, name, image, featured)
@@ -372,7 +387,7 @@ async function saveBrand(record: PayloadRecord) {
         name = excluded.name,
         image = excluded.image,
         featured = excluded.featured
-    `,
+    `, 
     [id, code || id, name, toStringValue(record.image) || null, featured],
   );
 }
@@ -610,7 +625,7 @@ function parsePackItems(value: unknown): PackItemDraft[] {
   }
 }
 
-async function savePack(record: PayloadRecord, formData: FormData) {
+async function savePack(record: PayloadRecord) {
   const id = record.id ? toNumber(record.id) : await nextNumericId("promotion_packs");
   const title = toStringValue(record.title);
   const apodo = toStringValue(record.apodo) || slugify(title);
@@ -865,7 +880,7 @@ async function saveMeta(record: PayloadRecord) {
   );
 }
 
-async function saveRow(table: AdminTableKey, record: PayloadRecord, formData: FormData) {
+async function saveRow(table: AdminTableKey, record: PayloadRecord) {
   switch (table) {
     case "products":
       return saveProduct(record);
@@ -880,7 +895,7 @@ async function saveRow(table: AdminTableKey, record: PayloadRecord, formData: Fo
     case "banners":
       return saveBanner(record);
     case "packs":
-      return savePack(record, formData);
+      return savePack(record);
     case "header_search_scopes":
       return saveSearchScope(record);
     case "header_sections":
@@ -996,7 +1011,7 @@ export async function saveAdminRecord(formData: FormData) {
     throw new Error("Falta la tabla.");
   }
 
-  await saveRow(table, payload, formData);
+  await saveRow(table, payload);
   refreshAdminViews();
 }
 

@@ -7,6 +7,9 @@
     "build": "next build",
     "hostinger:package": "node scripts/package-hostinger.mjs",
     "hostinger:package:source": "node scripts/package-hostinger-source.mjs",
+    "robot:instagram-images": "node scripts/instagram-image-robot.mjs",
+    "robot:instagram-images:batches": "node scripts/instagram-image-robot-batches.mjs",
+    "robot:instagram-index": "node scripts/instagram-image-robot.mjs --index-only",
     "bootstrap:admin": "node scripts/bootstrap-admin-user.mjs",
     "start": "next start",
     "lint": "eslint",
@@ -28,6 +31,8 @@
     "playwright": "^1.61.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "sharp": "^0.35.3",
+    "tesseract.js": "^7.0.0",
     "vaul": "^1.1.2",
     "xlsx": "^0.18.5"
   },

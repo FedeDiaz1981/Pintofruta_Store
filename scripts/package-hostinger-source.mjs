@@ -26,6 +26,18 @@ const rootItems = [
   ".gitignore",
 ];
 
+const excludedScriptItems = [
+  "scripts/capture-instagram-profile-tranches.mjs",
+  "scripts/download-instagram-post-images.mjs",
+  "scripts/download-instagram-unique-srcs.mjs",
+  "scripts/export-instagram-profile-html.mjs",
+  "scripts/instagram-image-robot.mjs",
+  "scripts/instagram-image-robot-batches.mjs",
+  "scripts/rename-img-new-2-by-ocr.mjs",
+  "scripts/rename-img-new-2-rescue.mjs",
+  "scripts/rename-instagram-images.mjs",
+];
+
 async function copyItem(item) {
   const source = path.join(projectRoot, item);
   const target = path.join(packageRoot, item);
@@ -38,6 +50,10 @@ async function main() {
 
   for (const item of rootItems) {
     await copyItem(item);
+  }
+
+  for (const item of excludedScriptItems) {
+    await rm(path.join(packageRoot, item), { force: true });
   }
 }
 

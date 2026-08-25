@@ -505,7 +505,7 @@ export function CartPanel({
                   value={customerDetails.postalCode}
                   onChange={(event) => setCustomerDetails((current) => ({ ...current, postalCode: event.target.value }))}
                   className="h-12 rounded-xl border border-[var(--pf-border-soft)] bg-white px-4 text-sm outline-none"
-                  placeholder="Codigo postal"
+                  placeholder="Código postal"
                   required
                 />
               </label>

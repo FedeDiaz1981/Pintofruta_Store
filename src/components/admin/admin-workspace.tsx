@@ -49,6 +49,8 @@ type UploadState = {
   fileName?: string;
 };
 
+const CLEAR_IMAGE_VALUE = "__pf_clear_image__";
+
 const sidebarSections: { title: string; keys: AdminTableKey[] }[] = [
   { title: "Configuración", keys: ["site_content_meta"] },
   { title: "Listas", keys: ["products", "packs", "brands", "categories", "users"] },
@@ -566,7 +568,7 @@ function PackProductsField({
             );
           })
         ) : (
-          <span className="text-sm text-[var(--pf-muted)]">Todav?a no seleccionaste productos para este pack.</span>
+          <span className="text-sm text-[var(--pf-muted)]">Todavía no seleccionaste productos para este pack.</span>
         )}
       </div>
 
@@ -574,13 +576,13 @@ function PackProductsField({
         <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,0.7fr)_auto] gap-3 border-b border-[var(--pf-border-soft)] bg-[rgba(248,242,232,0.6)] px-4 py-3 text-[11px] font-black uppercase tracking-[0.24em] text-[var(--pf-muted)]">
           <span>Producto</span>
           <span>Cantidad</span>
-          <span>Acci?n</span>
+          <span>Acción</span>
         </div>
 
         <div className="divide-y divide-slate-100">
           {filteredProducts.length === 0 ? (
             <div className="px-4 py-6 text-sm text-[var(--pf-muted)]">
-              No hay productos cargados para seleccionar. Primero complet? la tabla de productos.
+              No hay productos cargados para seleccionar. Primero completá la tabla de productos.
             </div>
           ) : (
             filteredProducts.map((product) => {
@@ -1626,102 +1628,137 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                         </div>
 
                         <div className="space-y-3 rounded-[22px] border border-[var(--pf-border-soft)] bg-white p-4">
-                          <label className="flex min-h-20 cursor-pointer items-center justify-between gap-4 rounded-[18px] border border-dashed border-[rgba(168,109,69,0.24)] bg-[rgba(168,109,69,0.05)] px-4 py-4 transition hover:bg-[rgba(168,109,69,0.08)]">
-                            <div className="min-w-0">
-                              <span className="block text-sm font-bold text-[var(--pf-primary-darker)]">
-                                Seleccionar imagen
-                              </span>
-                              <span className="mt-1 block text-xs text-[var(--pf-muted)]">
-                                Cargá un archivo para subirlo al sitio.
-                              </span>
-                              <span className="mt-2 block truncate text-xs font-semibold text-[var(--pf-primary-darker)]">
-                                {selectedFileName || "Ningún archivo seleccionado todavía"}
-                              </span>
-                            </div>
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+                            <label className="flex min-h-20 cursor-pointer items-center justify-between gap-4 rounded-[18px] border border-dashed border-[rgba(168,109,69,0.24)] bg-[rgba(168,109,69,0.05)] px-4 py-4 transition hover:bg-[rgba(168,109,69,0.08)] lg:flex-1">
+                              <div className="min-w-0">
+                                <span className="block text-sm font-bold text-[var(--pf-primary-darker)]">
+                                  Seleccionar imagen
+                                </span>
+                                <span className="mt-1 block text-xs text-[var(--pf-muted)]">
+                                  Cargá un archivo para subirlo al sitio.
+                                </span>
+                                <span className="mt-2 block truncate text-xs font-semibold text-[var(--pf-primary-darker)]">
+                                  {selectedFileName || "Ningún archivo seleccionado todavía"}
+                                </span>
+                              </div>
 
-                            <div className="shrink-0 rounded-full bg-[linear-gradient(180deg,var(--pf-secondary-light)_0%,var(--pf-secondary)_100%)] px-4 py-2 text-sm font-black text-[var(--pf-text)] shadow-[0_10px_24px_rgba(168,109,69,0.18)]">
-                              Buscar archivo
-                            </div>
+                              <div className="shrink-0 rounded-full bg-[linear-gradient(180deg,var(--pf-secondary-light)_0%,var(--pf-secondary)_100%)] px-4 py-2 text-sm font-black text-[var(--pf-text)] shadow-[0_10px_24px_rgba(168,109,69,0.18)]">
+                                Buscar archivo
+                              </div>
 
-                            <input
-                              id={`admin-file-input-${selectedTable.key}-${field.key}`}
-                              data-testid={`admin-file-input-${selectedTable.key}-${field.key}`}
-                              type="file"
-                              accept="image/*"
-                              className="sr-only"
-                              disabled={Boolean(uploadState?.loading)}
-                              onChange={async (event) => {
-                                const file = event.target.files?.[0];
+                              <input
+                                id={`admin-file-input-${selectedTable.key}-${field.key}`}
+                                data-testid={`admin-file-input-${selectedTable.key}-${field.key}`}
+                                type="file"
+                                accept="image/*"
+                                className="sr-only"
+                                disabled={Boolean(uploadState?.loading)}
+                                onChange={async (event) => {
+                                  const file = event.target.files?.[0];
 
-                                if (!file) {
-                                  return;
-                                }
+                                  if (!file) {
+                                    return;
+                                  }
 
-                                const previousValue = typeof editor?.draft[field.key] === "string" ? editor.draft[field.key] : "";
+                                  const previousValue = typeof editor?.draft[field.key] === "string" ? editor.draft[field.key] : "";
 
-                                setFileNames((current) => ({
-                                  ...current,
-                                  [field.key]: file.name,
-                                }));
-                                setUploadStates((current) => ({
-                                  ...current,
-                                  [field.key]: {
-                                    loading: true,
-                                    fileName: file.name,
-                                  },
-                                }));
+                                  setFileNames((current) => ({
+                                    ...current,
+                                    [field.key]: file.name,
+                                  }));
+                                  setUploadStates((current) => ({
+                                    ...current,
+                                    [field.key]: {
+                                      loading: true,
+                                      fileName: file.name,
+                                    },
+                                  }));
 
-                                try {
-                                  const fallbackName = [
-                                    String(editor?.draft.title ?? "").trim(),
-                                    String(editor?.draft.name ?? "").trim(),
-                                    String(editor?.draft.sku ?? "").trim(),
-                                    selectedTable.label,
-                                    field.key,
-                                  ]
-                                    .filter(Boolean)
-                                    .join("-");
+                                  try {
+                                    const fallbackName = [
+                                      String(editor?.draft.title ?? "").trim(),
+                                      String(editor?.draft.name ?? "").trim(),
+                                      String(editor?.draft.sku ?? "").trim(),
+                                      selectedTable.label,
+                                      field.key,
+                                    ]
+                                      .filter(Boolean)
+                                      .join("-");
 
-                                  const publicUrl = await uploadAdminImage(file, selectedTable.key, fallbackName);
+                                    const publicUrl = await uploadAdminImage(file, selectedTable.key, fallbackName);
 
+                                    setEditor((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            draft: { ...current.draft, [field.key]: publicUrl },
+                                          }
+                                        : current,
+                                    );
+                                    setUploadStates((current) => ({
+                                      ...current,
+                                      [field.key]: {
+                                        loading: false,
+                                        fileName: file.name,
+                                      },
+                                    }));
+                                  } catch (error) {
+                                    setEditor((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            draft: { ...current.draft, [field.key]: previousValue },
+                                          }
+                                        : current,
+                                    );
+                                    setUploadStates((current) => ({
+                                      ...current,
+                                      [field.key]: {
+                                        loading: false,
+                                        fileName: file.name,
+                                        error: error instanceof Error ? error.message : "No se pudo subir la imagen.",
+                                      },
+                                    }));
+                                  } finally {
+                                    event.target.value = "";
+                                  }
+                                }}
+                              />
+                            </label>
+
+                            {selectedTable.key === "products" && field.key === "image" && imageValue && imageValue !== CLEAR_IMAGE_VALUE ? (
+                              <button
+                                type="button"
+                                onClick={() => {
                                   setEditor((current) =>
                                     current
                                       ? {
                                           ...current,
-                                          draft: { ...current.draft, [field.key]: publicUrl },
+                                          draft: {
+                                            ...current.draft,
+                                            [field.key]: CLEAR_IMAGE_VALUE,
+                                          },
                                         }
                                       : current,
                                   );
+                                  setFileNames((current) => ({
+                                    ...current,
+                                    [field.key]: "",
+                                  }));
                                   setUploadStates((current) => ({
                                     ...current,
                                     [field.key]: {
                                       loading: false,
-                                      fileName: file.name,
+                                      fileName: "",
                                     },
                                   }));
-                                } catch (error) {
-                                  setEditor((current) =>
-                                    current
-                                      ? {
-                                          ...current,
-                                          draft: { ...current.draft, [field.key]: previousValue },
-                                        }
-                                      : current,
-                                  );
-                                  setUploadStates((current) => ({
-                                    ...current,
-                                    [field.key]: {
-                                      loading: false,
-                                      fileName: file.name,
-                                      error: error instanceof Error ? error.message : "No se pudo subir la imagen.",
-                                    },
-                                  }));
-                                } finally {
-                                  event.target.value = "";
-                                }
-                              }}
-                            />
-                          </label>
+                                }}
+                                className="inline-flex min-h-20 items-center justify-center rounded-[18px] border border-[rgba(185,79,54,0.18)] bg-[rgba(185,79,54,0.06)] px-4 py-4 text-sm font-bold text-[var(--pf-wood-muted)] transition hover:bg-[rgba(185,79,54,0.1)] lg:w-[180px]"
+                              >
+                                Quitar imagen
+                              </button>
+                            ) : null}
+                          </div>
 
                           {uploadState?.loading ? (
                             <div className="rounded-[18px] border border-[rgba(168,109,69,0.18)] bg-[rgba(168,109,69,0.08)] px-4 py-3 text-sm text-[var(--pf-primary-darker)]">
@@ -1735,7 +1772,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                             </div>
                           ) : null}
 
-                          {imageValue ? (
+                          {imageValue && imageValue !== CLEAR_IMAGE_VALUE ? (
                             <div className="overflow-hidden rounded-[18px] border border-[var(--pf-border-soft)] bg-[#f7f4ee]">
                               <div className="flex items-center justify-between border-b border-[var(--pf-border-soft)] px-4 py-2">
                                 <span className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--pf-muted)]">
@@ -1753,8 +1790,18 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                               </div>
                             </div>
                           ) : (
-                            <div className="rounded-[18px] border border-dashed border-[var(--pf-border-soft)] bg-[rgba(248,242,232,0.6)] px-4 py-5 text-sm text-[var(--pf-muted)]">
-                              Todavía no se subió una imagen para esta promoción.
+                            <div className="flex min-h-[190px] flex-col items-center justify-center gap-3 rounded-[18px] border border-dashed border-[var(--pf-border-soft)] bg-[rgba(248,242,232,0.6)] px-4 py-5 text-center text-sm text-[var(--pf-muted)]">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src="/assets/images/no-image.svg"
+                                alt="Sin imagen"
+                                className="h-16 w-16 opacity-75"
+                              />
+                              <span>
+                                {imageValue === CLEAR_IMAGE_VALUE
+                                  ? "La imagen fue quitada. Guardá los cambios para dejar el producto sin imagen."
+                                  : "Todavía no se subió una imagen para esta promoción."}
+                              </span>
                             </div>
                           )}
                         </div>
