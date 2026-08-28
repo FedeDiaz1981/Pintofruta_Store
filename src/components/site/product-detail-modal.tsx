@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -139,33 +139,37 @@ export function ProductDetailModal({
   return (
     <dialog
       ref={dialogRef}
-      className="modal modal-top !z-[12050] items-start pt-[96px] lg:pt-[136px]"
+      className="modal !z-[12050] items-center justify-center p-4 sm:p-6 lg:p-8"
       onClick={(event) => {
         if (event.target === dialogRef.current) {
           dialogRef.current?.close();
         }
       }}
     >
-      <div className="modal-box max-h-[calc(100dvh-1rem)] max-w-6xl overflow-y-auto overscroll-contain rounded-[2rem] border border-[var(--pf-border-warm)] bg-[var(--pf-surface)] p-0 pb-[calc(5.5rem+env(safe-area-inset-bottom))] text-[var(--pf-text)] shadow-[0_30px_80px_rgba(74,57,38,0.26)] sm:max-h-[calc(100dvh-2rem)] sm:pb-0">
+      <div className="modal-box w-[min(100%,72rem)] max-w-6xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain rounded-[2rem] border border-[var(--pf-border-warm)] bg-[linear-gradient(180deg,rgba(255,251,245,0.98),rgba(249,243,232,0.98))] p-0 text-[var(--pf-text)] shadow-[0_32px_90px_rgba(74,57,38,0.22)] ring-1 ring-[rgba(255,255,255,0.35)] sm:max-h-[calc(100dvh-3rem)]">
         {product ? (
-          <div className="grid gap-0 lg:grid-cols-[1.08fr_0.92fr]">
-            <div className="relative min-h-[280px] bg-[linear-gradient(180deg,rgba(238,230,214,0.95),rgba(248,244,236,0.98))] p-3 sm:min-h-[480px] sm:p-6 lg:p-8">
-              <div className="relative h-full min-h-[240px] overflow-hidden rounded-[1.75rem] bg-[rgba(255,255,255,0.92)] sm:min-h-[360px]">
+          <div className="grid gap-0 lg:grid-cols-[1.02fr_0.98fr] lg:min-h-[min(76vh,54rem)]">
+            <div className="relative bg-[linear-gradient(180deg,rgba(238,230,214,0.98),rgba(247,241,231,0.98))] p-2 sm:p-6 lg:flex lg:h-full lg:items-center lg:p-8">
+              <div className="relative aspect-[1/0.72] w-full overflow-hidden rounded-[1.5rem] border border-[rgba(255,255,255,0.72)] bg-[rgba(255,255,255,0.9)] shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_10px_30px_rgba(97,68,34,0.08)] sm:aspect-[4/5] lg:h-full lg:aspect-auto">
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.9),transparent_58%)]" />
                 <Image
                   src={publicAsset(product.image)}
                   alt={product.name}
                   fill
-                  className="object-contain p-2 sm:p-4"
+                  className="object-contain object-center p-2 sm:p-6 lg:p-8"
                   sizes="(max-width: 1024px) 100vw, 50vw"
                   priority
                 />
               </div>
             </div>
 
-            <div className="flex min-h-0 flex-col gap-5 p-4 pb-[calc(6.5rem+env(safe-area-inset-bottom))] sm:p-8 sm:pb-8">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 className="text-2xl font-extrabold tracking-tight text-[var(--pf-text)] sm:text-5xl">{product.name}</h3>
+            <div className="flex min-h-0 min-w-0 flex-col gap-4 px-4 pb-5 pt-3 sm:gap-6 sm:p-8 lg:px-10 lg:py-9">
+              <div className="flex w-full min-w-0 items-start justify-between gap-4 border-b border-[rgba(168,109,69,0.10)] pb-4">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[0.72rem] uppercase tracking-[0.34em] text-[var(--pf-muted)]">Detalle del producto</p>
+                  <h3 className="mt-2 text-[1.55rem] font-extrabold leading-[1.04] tracking-tight text-balance text-[var(--pf-text)] sm:text-4xl lg:text-[2.55rem]">
+                    {product.name}
+                  </h3>
                 </div>
                 <form method="dialog">
                   <Button type="submit" variant="secondary" size="icon" aria-label="Cerrar">
@@ -175,12 +179,12 @@ export function ProductDetailModal({
               </div>
 
               {fullDescription ? (
-                <div className="max-w-2xl text-sm leading-6 text-[var(--pf-muted)] sm:text-base sm:leading-7">
-                  <p>{shortDescription}</p>
+                <div className="w-full max-w-none border-b border-[rgba(168,109,69,0.10)] pb-4 text-sm leading-6 text-[var(--pf-muted)] sm:pb-5 sm:text-base sm:leading-7">
+                  <p className="max-w-[42rem] break-words text-pretty">{shortDescription}</p>
                   {shouldTruncateDescription ? (
                     <button
                       type="button"
-                      className="mt-2 inline-flex items-center text-sm font-semibold text-[var(--pf-accent)] underline decoration-[rgba(168,109,69,0.45)] underline-offset-4 transition hover:opacity-80"
+                      className="mt-3 inline-flex items-center text-sm font-semibold text-[var(--pf-accent)] underline decoration-[rgba(168,109,69,0.45)] underline-offset-4 transition hover:opacity-80"
                       onClick={() => setShowFullDetails(true)}
                     >
                       Ver más
@@ -189,11 +193,11 @@ export function ProductDetailModal({
                 </div>
               ) : null}
 
-              <div className="rounded-[1.5rem] border border-[var(--pf-border)] bg-[rgba(255,255,255,0.8)] p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+              <div className="rounded-[1.5rem] border border-[rgba(168,109,69,0.14)] bg-[rgba(255,255,255,0.72)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-[2px] sm:p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.28em] text-[var(--pf-muted)]">Cantidad</p>
-                    <p className="mt-1 text-sm text-[var(--pf-muted)]">Elegí cuántas unidades querés agregar.</p>
+                    <p className="text-xs uppercase tracking-[0.3em] text-[var(--pf-muted)]">Cantidad</p>
+                    <p className="mt-1 max-w-md text-sm leading-5 text-[var(--pf-muted)] sm:leading-6">Elegí cuántas unidades querés agregar.</p>
                   </div>
                   <div className="flex items-center gap-2 self-start sm:self-auto">
                     <Button
@@ -235,31 +239,31 @@ export function ProductDetailModal({
                 </div>
               </div>
 
-              <div className="rounded-[1.75rem] border border-[rgba(212,189,156,0.55)] bg-[rgba(237,220,195,0.55)] p-5">
-                <p className="text-xs uppercase tracking-[0.32em] text-[var(--pf-muted)]">Total</p>
-                <p className="mt-2 text-4xl font-extrabold tracking-tight text-[var(--pf-text)]">{formatCurrency(totalPrice)}</p>
+              <div className="rounded-[1.75rem] border border-[rgba(212,189,156,0.45)] bg-[rgba(237,220,195,0.5)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] sm:p-5">
+                <p className="text-xs uppercase tracking-[0.34em] text-[var(--pf-muted)]">Total</p>
+                <p className="mt-2 text-[2.6rem] font-extrabold tracking-tight text-[var(--pf-text)] sm:text-[2.85rem]">{formatCurrency(totalPrice)}</p>
                 <p className="mt-1 text-sm text-[var(--pf-muted)]">
                   {safeQuantity} x {formatCurrency(unitPrice)}
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-2 pb-1">
-                <Badge variant="outline" className="border-[rgba(168,109,69,0.22)] text-[var(--pf-text)]">
+              <div className="flex w-full flex-wrap gap-2">
+                <Badge variant="outline" className="border-[rgba(168,109,69,0.18)] bg-[rgba(255,255,255,0.45)] text-[var(--pf-text)]">
                   {product.brand}
                 </Badge>
-                <Badge variant="outline" className="border-[rgba(168,109,69,0.22)] text-[var(--pf-text)]">
+                <Badge variant="outline" className="border-[rgba(168,109,69,0.18)] bg-[rgba(255,255,255,0.45)] text-[var(--pf-text)]">
                   {product.categoryName}
                 </Badge>
-                {product.vegano ? <Badge variant="outline" className="border-success/40 text-success">Vegano</Badge> : null}
-                {product.kosher ? <Badge variant="outline" className="border-info/40 text-info">Kosher</Badge> : null}
-                {product.testeadoEnAnimales === false ? <Badge variant="outline">Cruelty free</Badge> : null}
+                {product.vegano ? <Badge variant="outline" className="border-success/40 bg-[rgba(255,255,255,0.45)] text-success">Vegano</Badge> : null}
+                {product.kosher ? <Badge variant="outline" className="border-info/40 bg-[rgba(255,255,255,0.45)] text-info">Kosher</Badge> : null}
+                {product.testeadoEnAnimales === false ? <Badge variant="outline" className="bg-[rgba(255,255,255,0.45)]">Cruelty free</Badge> : null}
               </div>
 
-              <div className="mt-auto flex flex-wrap gap-3 pb-2 sm:pb-0">
+              <div className="mt-auto border-t border-[rgba(168,109,69,0.10)] pt-5">
                 <CartAddButton
                   product={product}
                   quantity={safeQuantity}
-                  className={`rounded-full normal-case transition duration-300 ${isAdding ? "scale-[0.98] brightness-110" : ""}`}
+                  className={`w-full rounded-full py-6 text-base font-semibold normal-case shadow-[0_12px_30px_rgba(168,109,69,0.18)] transition duration-300 sm:w-auto sm:px-8 ${isAdding ? "scale-[0.98] brightness-110" : ""}`}
                   onClick={() => {
                     setIsAdding(true);
 
@@ -286,18 +290,18 @@ export function ProductDetailModal({
 
       <dialog
         ref={detailsDialogRef}
-        className="modal modal-top !z-[12050] items-start pt-[96px] lg:pt-[136px]"
+        className="modal !z-[12050] items-center justify-center p-4 sm:p-6 lg:p-8"
         onClick={(event) => {
           if (event.target === detailsDialogRef.current) {
             detailsDialogRef.current?.close();
           }
         }}
       >
-        <div className="modal-box max-h-[calc(100dvh-1rem)] max-w-3xl overflow-y-auto overscroll-contain rounded-[2rem] border border-[var(--pf-border-warm)] bg-[var(--pf-surface)] p-0 text-[var(--pf-text)] shadow-[0_30px_80px_rgba(74,57,38,0.26)] sm:max-h-[calc(100dvh-2rem)]">
+        <div className="modal-box w-[min(100%,48rem)] max-w-3xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain rounded-[2rem] border border-[var(--pf-border-warm)] bg-[var(--pf-surface)] p-0 text-[var(--pf-text)] shadow-[0_30px_80px_rgba(74,57,38,0.22)] sm:max-h-[calc(100dvh-3rem)]">
           <div className="flex items-start justify-between gap-4 border-b border-[rgba(168,109,69,0.12)] p-4 sm:p-8">
             <div>
               <p className="text-xs uppercase tracking-[0.3em] text-[var(--pf-muted)]">Detalle completo</p>
-              <h3 className="mt-2 text-xl font-extrabold tracking-tight sm:text-4xl">{product?.name}</h3>
+              <h3 className="mt-2 text-xl font-extrabold leading-tight tracking-tight sm:text-4xl">{product?.name}</h3>
             </div>
             <form method="dialog">
               <Button type="submit" variant="secondary" size="icon" aria-label="Cerrar detalle completo">
@@ -306,8 +310,8 @@ export function ProductDetailModal({
             </form>
           </div>
 
-          <div className="p-4 text-sm leading-6 text-[var(--pf-muted)] sm:max-h-[70vh] sm:overflow-y-auto sm:p-8 sm:text-base sm:leading-7">
-            <p className="whitespace-pre-line">{fullDescription}</p>
+          <div className="p-4 text-sm leading-7 text-[var(--pf-muted)] sm:max-h-[70vh] sm:overflow-y-auto sm:p-8 sm:text-base">
+            <p className="whitespace-pre-line break-words text-pretty">{fullDescription}</p>
           </div>
         </div>
 
@@ -318,3 +322,4 @@ export function ProductDetailModal({
     </dialog>
   );
 }
+

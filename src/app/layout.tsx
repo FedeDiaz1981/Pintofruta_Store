@@ -4,6 +4,7 @@ import { Inter, Manrope } from "next/font/google";
 import { getActiveSiteBanners, getDynamicHeaderMenus } from "@/application/catalog";
 import { ViewerProvider } from "@/components/auth/viewer-provider";
 import { CartProvider } from "@/components/cart/cart-context";
+import { FloatingCartButton } from "@/components/cart/floating-cart-button";
 import { CartPanel } from "@/components/cart/cart-panel";
 import { MobileSiteChrome } from "@/components/site/mobile-site-chrome";
 import { SiteBannerStrip } from "@/components/site/site-banner-strip";
@@ -54,10 +55,12 @@ export default async function RootLayout({
               </div>
               <SiteHeader menus={menus} />
               <MobileSiteChrome menus={menus} />
+              <div id="pf-header-sentinel" aria-hidden="true" className="h-px w-full" />
               <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain pt-[88px] pb-[72px] lg:overflow-visible lg:pt-0 lg:pb-0">
                 {children}
               </main>
               <SiteFooter />
+              <FloatingCartButton />
               <CartPanel />
             </div>
           </CartProvider>
