@@ -1,4 +1,4 @@
-import Image from "next/image";
+﻿import Image from "next/image";
 import Link from "next/link";
 
 import { getHomePageViewModel } from "@/application/catalog";
@@ -72,7 +72,7 @@ export default async function HomePage() {
             <div className="flex flex-col justify-between">
               <div>
                 <span className="inline-flex rounded-full bg-[rgba(168,109,69,0.14)] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--pf-primary-darker)]">
-                  Quienes somos
+                  Quiénes somos
                 </span>
                 <h2 className="mt-3 max-w-xl text-[2.15rem] font-light leading-[0.96] tracking-[-0.05em] text-[var(--pf-text)] sm:text-[2.75rem] lg:text-[3.15rem]">
                   Conectamos marcas, productos y personas.
@@ -140,3 +140,5 @@ export default async function HomePage() {
     </main>
   );
 }
+
+

@@ -259,7 +259,7 @@ async function saveProduct(record: PayloadRecord) {
   const categoryIds = selectedCategoryIds.length > 0 ? selectedCategoryIds : fallbackCategoryIds;
 
   if (categoryIds.length === 0) {
-    throw new Error("El producto necesita al menos una categoria.");
+    throw new Error("El producto necesita al menos una categoría.");
   }
 
   const categoryResult = await postgresPool!.query<{ id: number; name: string }>(
@@ -1047,3 +1047,6 @@ export async function deleteAdminRecords(formData: FormData) {
 
   refreshAdminViews();
 }
+
+
+

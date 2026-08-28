@@ -529,7 +529,7 @@ function PackProductsField({
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             className="ml-3 flex-1 bg-transparent text-sm text-[var(--pf-text)] outline-none placeholder:text-[var(--pf-muted)]"
-            placeholder="SKU, nombre, marca o categor?a"
+            placeholder="SKU, nombre, marca o categoría"
           />
         </label>
 
@@ -538,7 +538,7 @@ function PackProductsField({
           onClick={() => updateSelections([])}
           className="rounded-full border border-[var(--pf-border-soft)] bg-white px-4 py-2 text-sm font-semibold text-[var(--pf-primary-darker)] transition hover:bg-[rgba(248,242,232,0.6)]"
         >
-          Limpiar selecci?n
+          Limpiar selección
         </button>
       </div>
 
@@ -813,7 +813,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
               </div>
               <div>
                 <p className="text-lg font-semibold text-[var(--pf-secondary-faint)]">Pintofruta</p>
-                <p className="text-sm text-[#f8f1e7]/80">Panel de administracion</p>
+                <p className="text-sm text-[#f8f1e7]/80">Panel de administración</p>
               </div>
             </div>
           </div>
@@ -1276,7 +1276,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
 
                         {options.length === 0 ? (
                           <div className="rounded-[22px] border border-dashed border-[var(--pf-border-soft)] bg-white px-4 py-4 text-sm text-[var(--pf-muted)]">
-                            No hay categorias visibles para seleccionar.
+                            No hay categorías visibles para seleccionar.
                           </div>
                         ) : (
                           <div className="space-y-3 rounded-[22px] border border-[var(--pf-border-soft)] bg-white p-4">
@@ -1887,5 +1887,6 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
     </main>
   );
 }
+
 
 

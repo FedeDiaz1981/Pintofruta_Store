@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useRouter } from "next/navigation";
-import { Minus, Plus, X } from "lucide-react";
-import { useCallback, useState } from "react";
+import { FileText, Minus, Plus, Send, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
 import { useCart, resolveCartLineUnitPrice } from "@/components/cart/cart-context";
 import { useViewer } from "@/components/auth/viewer-provider";
@@ -27,6 +27,8 @@ type DeliveryErrorState = {
   canDownload: boolean;
 } | null;
 
+type SubmissionStage = "generating" | "sending";
+
 const EMPTY_CUSTOMER_DETAILS: CustomerDetailsDraft = {
   name: "",
   cuit: "",
@@ -47,6 +49,16 @@ function toCustomerDetailsPayload(values: CustomerDetailsDraft) {
   };
 }
 
+function estimateSubmissionDurationMs(itemCount: number) {
+  const base = 6500;
+  const extra = Math.max(0, itemCount - 1) * 280;
+  return Math.min(16000, Math.max(base, base + extra));
+}
+
+function getGenerationCutoffMs(estimatedDurationMs: number) {
+  return Math.min(Math.max(2200, Math.round(estimatedDurationMs * 0.48)), Math.max(2200, estimatedDurationMs - 1200));
+}
+
 export function CartPanel({
   mode = "drawer",
 }: {
@@ -57,10 +69,33 @@ export function CartPanel({
   const viewer = useViewer();
   const router = useRouter();
   const [isSubmittingPedido, setIsSubmittingPedido] = useState(false);
+  const [submissionStage, setSubmissionStage] = useState<SubmissionStage>("generating");
+  const [submissionStartedAt, setSubmissionStartedAt] = useState<number | null>(null);
+  const [submissionEstimateMs, setSubmissionEstimateMs] = useState(0);
+  const [submissionSecondsLeft, setSubmissionSecondsLeft] = useState(0);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [deliveryError, setDeliveryError] = useState<DeliveryErrorState>(null);
   const [isDeliverySuccessOpen, setIsDeliverySuccessOpen] = useState(false);
   const [customerDetails, setCustomerDetails] = useState<CustomerDetailsDraft>(EMPTY_CUSTOMER_DETAILS);
+
+  useEffect(() => {
+    if (!isSubmittingPedido || submissionStartedAt == null || submissionEstimateMs <= 0) {
+      return undefined;
+    }
+
+    const updateProgress = () => {
+      const elapsedMs = Date.now() - submissionStartedAt;
+      const generationCutoffMs = getGenerationCutoffMs(submissionEstimateMs);
+
+      setSubmissionStage(elapsedMs >= generationCutoffMs ? "sending" : "generating");
+      setSubmissionSecondsLeft(Math.max(0, Math.ceil((submissionEstimateMs - elapsedMs) / 1000)));
+    };
+
+    updateProgress();
+    const interval = window.setInterval(updateProgress, 250);
+
+    return () => window.clearInterval(interval);
+  }, [isSubmittingPedido, submissionEstimateMs, submissionStartedAt]);
 
   const resetCustomerModal = useCallback(() => {
     setIsCustomerModalOpen(false);
@@ -98,6 +133,12 @@ export function CartPanel({
       }
 
       try {
+        const estimatedDurationMs = estimateSubmissionDurationMs(items.length);
+
+        setSubmissionStage("generating");
+        setSubmissionStartedAt(Date.now());
+        setSubmissionEstimateMs(estimatedDurationMs);
+        setSubmissionSecondsLeft(Math.ceil(estimatedDurationMs / 1000));
         setIsSubmittingPedido(true);
 
         const orderPayload = JSON.stringify({
@@ -154,6 +195,10 @@ export function CartPanel({
         resetCustomerModal();
       } finally {
         setIsSubmittingPedido(false);
+        setSubmissionStartedAt(null);
+        setSubmissionEstimateMs(0);
+        setSubmissionSecondsLeft(0);
+        setSubmissionStage("generating");
       }
     },
     [clearCart, hydrated, isSubmittingPedido, items, resetCustomerModal],
@@ -212,7 +257,7 @@ export function CartPanel({
             </div>
           ) : items.length === 0 ? (
             <div className="rounded-[1.35rem] border border-[var(--pf-border)] bg-[rgba(255,255,255,0.8)] p-5">
-              <p className="text-lg font-bold text-[var(--pf-text)]">Tu pedido esta vacio</p>
+              <p className="text-lg font-bold text-[var(--pf-text)]">Tu pedido está vacío</p>
               <div className="mt-4">
                 {mode === "drawer" ? (
                   <label
@@ -334,14 +379,25 @@ export function CartPanel({
             <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-[rgba(168,109,69,0.22)] bg-white shadow-[0_12px_30px_rgba(74,57,38,0.1)]">
               <div className="relative h-11 w-11">
                 <span className="absolute inset-0 rounded-full border-4 border-[rgba(168,109,69,0.18)] border-t-[var(--pf-secondary)] animate-spin" />
-                <img
-                  src={publicAsset("/assets/images/logo/logo-Pintofruta_bl.png")}
-                  alt="Pintofruta"
-                  className="absolute inset-0 m-auto h-5 w-5 object-contain opacity-90"
-                />
+                <div className="absolute inset-0 flex items-center justify-center text-[var(--pf-primary-darker)]">
+                  {submissionStage === "sending" ? <Send className="size-6 -rotate-12 animate-bounce" /> : <FileText className="size-6 animate-pulse" />}
+                </div>
               </div>
             </div>
-            <h3 className="mt-5 text-2xl font-black tracking-tight text-[var(--pf-text)]">Enviando pedido</h3>
+            <p className="mt-5 text-[11px] font-black uppercase tracking-[0.34em] text-[var(--pf-secondary)]">
+              {submissionStage === "sending" ? "Enviando a la tienda" : "Generando pedido"}
+            </p>
+            <h3 className="mt-2 text-[1.55rem] font-black tracking-tight text-[var(--pf-text)] sm:text-3xl">
+              {submissionStage === "sending" ? "Tu pedido ya fue generado" : "Estamos armando tu pedido"}
+            </h3>
+            <p className="mt-3 text-sm leading-7 text-[var(--pf-primary-darker)]">
+              {submissionStage === "sending"
+                ? "Ahora lo estamos enviando a la tienda"
+                : "Estamos confeccionando el pedido con los productos que agregaste."}
+            </p>
+            <div className="mt-5 rounded-full border border-[rgba(168,109,69,0.12)] bg-white/70 px-4 py-2 text-sm font-semibold text-[var(--pf-text)]">
+              Finaliza en aproximadamente {submissionSecondsLeft}s
+            </div>
             <div className="mt-5 flex items-center justify-center gap-2 text-[var(--pf-secondary)]">
               <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-current [animation-delay:-0.2s]" />
               <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-current [animation-delay:0s]" />
@@ -411,7 +467,7 @@ export function CartPanel({
 
             <div className="px-6 py-6">
               <p className="text-sm leading-7 text-[var(--pf-primary-darker)]">
-                Ya se generó el Excel y se envió el mail al destinatario configurado.
+                En breve nos contactaremos para concretar la compra. Gracias por elegirnos.
               </p>
 
               <div className="mt-6 flex justify-end">
@@ -442,7 +498,7 @@ export function CartPanel({
                 <p className="text-[11px] font-black uppercase tracking-[0.34em] text-[var(--pf-secondary)]">Datos del cliente</p>
                 <h3 className="mt-2 text-3xl font-black tracking-tight text-[var(--pf-text)]">Confirmar pedido</h3>
                 <p className="mt-2 text-sm text-[var(--pf-primary-darker)]">
-                  Completa los datos antes de generar el Excel y enviar el mail.
+                  Completá los datos antes de confirmar el pedido y enviarlo a la tienda.
                 </p>
               </div>
 
@@ -487,13 +543,13 @@ export function CartPanel({
               </label>
 
               <label className="grid gap-2 md:col-span-2">
-                <span className="text-sm font-semibold text-[var(--pf-text)]">Direccion</span>
+                <span className="text-sm font-semibold text-[var(--pf-text)]">Dirección</span>
                 <input
                   type="text"
                   value={customerDetails.address}
                   onChange={(event) => setCustomerDetails((current) => ({ ...current, address: event.target.value }))}
                   className="h-12 rounded-xl border border-[var(--pf-border-soft)] bg-white px-4 text-sm outline-none"
-                  placeholder="Direccion completa"
+                  placeholder="Dirección completa"
                   required
                 />
               </label>
@@ -529,7 +585,7 @@ export function CartPanel({
                   value={customerDetails.phone}
                   onChange={(event) => setCustomerDetails((current) => ({ ...current, phone: event.target.value }))}
                   className="h-12 rounded-xl border border-[var(--pf-border-soft)] bg-white px-4 text-sm outline-none"
-                  placeholder="Numero de celular"
+                  placeholder="Número de celular"
                   required
                 />
               </label>
@@ -613,3 +669,4 @@ export function CartPanel({
     </div>
   );
 }
+

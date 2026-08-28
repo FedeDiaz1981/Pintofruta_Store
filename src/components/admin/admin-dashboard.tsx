@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { formatCurrency } from "@/lib/catalog";
 import type { AdminOverview } from "@/application/admin";
 
@@ -105,3 +105,5 @@ export function AdminDashboard({ admin }: { admin: AdminOverview }) {
     </main>
   );
 }
+
+

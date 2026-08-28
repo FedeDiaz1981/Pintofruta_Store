@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -150,7 +150,7 @@ export function OrderExcelTemplateButton({ disabled = false }: { disabled?: bool
               <p className="text-[11px] font-black uppercase tracking-[0.32em] text-[var(--pf-secondary-dark)]">Plantilla de pedido</p>
               <h3 className="mt-2 text-3xl font-black tracking-tight text-[var(--pf-text)]">Subir template Excel</h3>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--pf-muted)]">
-                Esta subida no importa productos. Solo guarda una nueva version del archivo que se usa despues al exportar el pedido.
+                Esta subida no importa productos. Solo guarda una nueva versión del archivo que se usa después al exportar el pedido.
               </p>
             </div>
 
@@ -196,7 +196,7 @@ export function OrderExcelTemplateButton({ disabled = false }: { disabled?: bool
                         : "border border-[rgba(74,57,38,0.12)] bg-white text-[var(--pf-primary-darker)] hover:bg-[var(--pf-surface-warm)]"
                     }`}
                   >
-                    I - Publico / invitados
+                    I - Público / invitados
                   </button>
                   <button
                     type="button"
@@ -248,3 +248,7 @@ export function OrderExcelTemplateButton({ disabled = false }: { disabled?: bool
     </>
   );
 }
+
+
+
+

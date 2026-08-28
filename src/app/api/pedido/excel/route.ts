@@ -1,4 +1,4 @@
-import { appendFileSync } from "node:fs";
+﻿import { appendFileSync } from "node:fs";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import type { OrderExcelRequestItem } from "@/lib/order-excel";
@@ -214,7 +214,7 @@ async function handleExcelExport(request: Request) {
 
   if (items.length === 0) {
     trace("request:empty");
-    return NextResponse.json({ error: "El pedido esta vacio." }, { status: 400 });
+    return NextResponse.json({ error: "El pedido está vacío." }, { status: 400 });
   }
 
   trace("viewer:start");
@@ -350,3 +350,6 @@ async function readRequestBody(request: Request): Promise<{
   const payload = new URL(request.url).searchParams.get("payload");
   return payload ? { payload } : null;
 }
+
+
+

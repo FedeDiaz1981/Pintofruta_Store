@@ -419,7 +419,7 @@
       "id": 1,
       "order": 1,
       "title": "Temporada fresca",
-      "subtitle": "Una apertura limpia para entrar al catalogo por novedades y categorias.",
+      "subtitle": "Una apertura limpia para entrar al catálogo por novedades y categorías.",
       "badge": "Inicio",
       "image": "Content/Images/Hero/Slider_01.png",
       "imageMobile": "Content/Images/Hero/Slider_01_mob.png",
@@ -431,7 +431,7 @@
       "id": 2,
       "order": 2,
       "title": "Energia para el dia",
-      "subtitle": "Una portada orientada a snacks y opciones listas para rotacion rapida.",
+      "subtitle": "Una portada orientada a snacks y opciones listas para rotación rápida.",
       "badge": "Snack",
       "image": "Content/Images/Hero/Slider_02.png",
       "imageMobile": "Content/Images/Hero/Slider_02_mob.png",
@@ -443,7 +443,7 @@
       "id": 3,
       "order": 3,
       "title": "Marcas destacadas",
-      "subtitle": "Un banner pensado para navegar el catalogo por identidad comercial.",
+      "subtitle": "Un banner pensado para navegar el catálogo por identidad comercial.",
       "badge": "Marca",
       "image": "Content/Images/Hero/Slider_03.png",
       "imageMobile": "Content/Images/Hero/Slider_03_mob.png",
@@ -1077,7 +1077,7 @@
       "stock": 45,
       "status": "published",
       "featured": false,
-      "description": "Crackers integrales de linea simple para acompañar el catalogo snack.",
+      "description": "Crackers integrales de línea simple para acompañar el catálogo snack.",
       "image": "Content/Images/articulos/pf015.jpg"
     },
     {
@@ -1518,3 +1518,8 @@
   },
   "ping": true
 }
+
+
+
+
+
