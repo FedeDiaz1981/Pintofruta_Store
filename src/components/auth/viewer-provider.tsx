@@ -29,10 +29,5 @@ export function ViewerProvider({
 export function useViewer() {
   const context = useContext(ViewerContext);
 
-  if (!context) {
-    throw new Error("useViewer debe usarse dentro de ViewerProvider");
-  }
-
-  return context.viewer;
+  return context?.viewer ?? null;
 }
-

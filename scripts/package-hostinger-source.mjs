@@ -55,6 +55,10 @@ async function main() {
   for (const item of excludedScriptItems) {
     await rm(path.join(packageRoot, item), { force: true });
   }
+
+  // Keep the app icon from src/app/icon.png so production shows the Pintofruta logo
+  // instead of the legacy favicon copied from public/assets.
+  await rm(path.join(packageRoot, "src", "app", "favicon.ico"), { force: true });
 }
 
 main().catch((error) => {

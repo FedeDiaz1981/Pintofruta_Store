@@ -30,7 +30,7 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Pintofruta Store",
+  title: "Pintofruta",
   description: "Proyecto dinámico basado en la maqueta estática de Pintofruta.",
 };
 

@@ -388,11 +388,11 @@ export function CartPanel({
               {submissionStage === "sending" ? "Enviando a la tienda" : "Generando pedido"}
             </p>
             <h3 className="mt-2 text-[1.55rem] font-black tracking-tight text-[var(--pf-text)] sm:text-3xl">
-              {submissionStage === "sending" ? "Tu pedido ya fue generado" : "Estamos armando tu pedido"}
+              {submissionStage === "sending" ? "Enviando pedido" : "Estamos armando tu pedido"}
             </h3>
             <p className="mt-3 text-sm leading-7 text-[var(--pf-primary-darker)]">
               {submissionStage === "sending"
-                ? "Ahora lo estamos enviando a la tienda"
+                ? "Su pedido fue generado y se está enviando a la tienda"
                 : "Estamos confeccionando el pedido con los productos que agregaste."}
             </p>
             <div className="mt-5 rounded-full border border-[rgba(168,109,69,0.12)] bg-white/70 px-4 py-2 text-sm font-semibold text-[var(--pf-text)]">

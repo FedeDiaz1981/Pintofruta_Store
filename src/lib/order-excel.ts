@@ -122,6 +122,10 @@ function traceExcel(step: string, details: Record<string, unknown> = {}) {
   }
 }
 
+function toExcelJsBuffer(buffer: Buffer): ArrayBuffer {
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
+}
+
 function cloneStyle<T>(value: T): T {
   if (value && typeof value === "object") {
     return JSON.parse(JSON.stringify(value)) as T;
@@ -1116,7 +1120,7 @@ export async function buildOrderExcelFile({
       const workbook = new ExcelJS.Workbook();
       console.info("[pedido/excel] build:workbook-load:start");
       traceExcel("build:workbook-load:start");
-      await workbook.xlsx.load(templateFile.buffer as any);
+      await workbook.xlsx.load(toExcelJsBuffer(templateFile.buffer));
       console.info("[pedido/excel] build:workbook-load:done");
       traceExcel("build:workbook-load:done");
       console.info("[pedido/excel] build:populate:start", { templateId: template.id });
