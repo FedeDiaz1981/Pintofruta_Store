@@ -13,31 +13,47 @@ type ProductImageManagerProps = {
 type ProductStatus = {
   loading?: boolean;
   error?: string;
+  phase?: string;
+  progress?: number;
 };
 
 type ImageFilter = "all" | "missing" | "with-image";
 
-async function uploadImage(file: File, product: ProductItem) {
-  const formData = new FormData();
-  formData.set("file", file);
-  formData.set("scope", "products");
-  formData.set("fallbackName", `${product.sku}-${product.name}`);
+function uploadImage(file: File, product: ProductItem, onProgress: (progress: number) => void) {
+  return new Promise<string>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.set("file", file);
+    formData.set("scope", "products");
+    formData.set("fallbackName", `${product.sku}-${product.name}`);
 
-  const response = await fetch("/api/admin/upload-image", {
-    method: "POST",
-    body: formData,
+    request.open("POST", "/api/admin/upload-image");
+    request.upload.addEventListener("progress", (event) => {
+      if (event.lengthComputable) {
+        onProgress(Math.min(99, Math.round((event.loaded / event.total) * 100)));
+      }
+    });
+    request.addEventListener("error", () => reject(new Error("No se pudo conectar con el servidor.")));
+    request.addEventListener("abort", () => reject(new Error("La carga fue cancelada.")));
+    request.addEventListener("load", () => {
+      let payload: { ok?: boolean; publicUrl?: string; error?: string } = {};
+
+      try {
+        payload = JSON.parse(request.responseText) as typeof payload;
+      } catch {
+        payload = {};
+      }
+
+      if (request.status < 200 || request.status >= 300 || !payload.ok || !payload.publicUrl) {
+        reject(new Error(payload.error || "No se pudo subir la imagen."));
+        return;
+      }
+
+      onProgress(100);
+      resolve(payload.publicUrl);
+    });
+    request.send(formData);
   });
-  const payload = (await response.json().catch(() => ({}))) as {
-    ok?: boolean;
-    publicUrl?: string;
-    error?: string;
-  };
-
-  if (!response.ok || !payload.ok || !payload.publicUrl) {
-    throw new Error(payload.error || "No se pudo subir la imagen.");
-  }
-
-  return payload.publicUrl;
 }
 
 export function ProductImageManager({ products, onClose }: ProductImageManagerProps) {
@@ -66,6 +82,7 @@ export function ProductImageManager({ products, onClose }: ProductImageManagerPr
   }, [imageFilter, localProducts, query]);
 
   const withImageCount = localProducts.filter((product) => Boolean(product.image?.trim())).length;
+  const loadingProduct = localProducts.find((product) => statuses[product.id]?.loading);
 
   function setStatus(productId: number, status: ProductStatus) {
     setStatuses((current) => ({ ...current, [productId]: status }));
@@ -81,10 +98,13 @@ export function ProductImageManager({ products, onClose }: ProductImageManagerPr
       return;
     }
 
-    setStatus(product.id, { loading: true });
+    setStatus(product.id, { loading: true, phase: "Subiendo imagen", progress: 0 });
 
     try {
-      const publicUrl = await uploadImage(file, product);
+      const publicUrl = await uploadImage(file, product, (progress) => {
+        setStatus(product.id, { loading: true, phase: "Subiendo imagen", progress });
+      });
+      setStatus(product.id, { loading: true, phase: "Guardando cambios", progress: 100 });
       await saveProductImage(product.id, publicUrl);
       setLocalProducts((current) =>
         current.map((currentProduct) =>
@@ -104,7 +124,7 @@ export function ProductImageManager({ products, onClose }: ProductImageManagerPr
       return;
     }
 
-    setStatus(product.id, { loading: true });
+    setStatus(product.id, { loading: true, phase: "Borrando imagen" });
 
     try {
       await saveProductImage(product.id, null);
@@ -122,7 +142,7 @@ export function ProductImageManager({ products, onClose }: ProductImageManagerPr
   }
 
   return (
-    <div className="flex max-h-[calc(100svh-5rem)] w-full max-w-7xl flex-col overflow-hidden rounded-[30px] border border-[var(--pf-border-soft)] bg-[#fbf8f1] shadow-[0_40px_120px_rgba(74,57,38,0.28)]">
+    <div className="relative flex max-h-[calc(100svh-5rem)] w-full max-w-7xl flex-col overflow-hidden rounded-[30px] border border-[var(--pf-border-soft)] bg-[#fbf8f1] shadow-[0_40px_120px_rgba(74,57,38,0.28)]">
       <div className="flex flex-col gap-5 border-b border-[var(--pf-border-soft)] px-6 py-6 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-[11px] font-black uppercase tracking-[0.34em] text-[var(--pf-secondary)]">Catalogo visual</p>
@@ -251,6 +271,38 @@ export function ProductImageManager({ products, onClose }: ProductImageManagerPr
           </div>
         ) : null}
       </div>
+
+      {loadingProduct ? (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#2d1f14b8] px-6 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[28px] border border-[var(--pf-border-soft)] bg-[#fbf8f1] p-7 text-center shadow-[0_30px_100px_rgba(45,31,20,0.3)]">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[rgba(168,109,69,0.12)]">
+              <span className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--pf-primary-soft)] border-t-[var(--pf-primary)]" />
+            </div>
+            <p className="mt-5 text-[11px] font-black uppercase tracking-[0.3em] text-[var(--pf-secondary)]">
+              {statuses[loadingProduct.id]?.phase || "Carga en curso"}
+            </p>
+            <h3 className="mt-2 text-2xl font-black tracking-tight text-[var(--pf-text)]">Estamos procesando la imagen</h3>
+            {typeof statuses[loadingProduct.id]?.progress === "number" ? (
+              <div className="mt-5">
+                <div className="flex items-center justify-between text-xs font-black text-[var(--pf-primary-darker)]">
+                  <span>Progreso</span>
+                  <span>{statuses[loadingProduct.id]?.progress}%</span>
+                </div>
+                <div className="mt-2 h-3 overflow-hidden rounded-full bg-[rgba(168,109,69,0.14)]">
+                  <div
+                    className="h-full rounded-full bg-[linear-gradient(90deg,var(--pf-primary-soft),var(--pf-primary))] transition-[width] duration-200"
+                    style={{ width: `${statuses[loadingProduct.id]?.progress}%` }}
+                  />
+                </div>
+              </div>
+            ) : null}
+            <p className="mt-3 text-sm leading-6 text-[var(--pf-muted)]">
+              La carga puede tardar unos minutos. No cierres esta ventana ni vuelvas a seleccionar otra imagen hasta que termine.
+            </p>
+            <p className="mt-4 truncate text-xs font-semibold text-[var(--pf-primary-darker)]">{loadingProduct.name}</p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

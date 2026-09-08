@@ -52,6 +52,7 @@ type UploadState = {
 };
 
 const CLEAR_IMAGE_VALUE = "__pf_clear_image__";
+const ADMIN_PAGE_SIZE = 50;
 
 const sidebarSections: { title: string; keys: AdminTableKey[] }[] = [
   { title: "Configuración", keys: ["site_content_meta"] },
@@ -639,6 +640,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
 
   const [selectedTableKey, setSelectedTableKey] = useState<AdminTableKey>(initialTableKey);
   const [query, setQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [packSearch, setPackSearch] = useState("");
   const [fileNames, setFileNames] = useState<Record<string, string>>({});
   const [uploadStates, setUploadStates] = useState<Record<string, UploadState>>({});
@@ -661,7 +663,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
     [selectedTable],
   );
 
-  const visibleRows = useMemo(() => {
+  const filteredRows = useMemo(() => {
     const normalized = query.trim().toLowerCase();
 
     const queryFilteredRows = !normalized
@@ -673,6 +675,11 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
     return queryFilteredRows.filter((row) => isVisibleAdminRow(selectedTable.key, row));
   }, [query, selectedRows, selectedTable.key]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / ADMIN_PAGE_SIZE));
+  const visibleRows = useMemo(
+    () => filteredRows.slice((currentPage - 1) * ADMIN_PAGE_SIZE, currentPage * ADMIN_PAGE_SIZE),
+    [currentPage, filteredRows],
+  );
   const visibleRowIds = useMemo(() => visibleRows.map((row) => getRowId(selectedTable, row)), [selectedTable, visibleRows]);
   const selectedRowIdSet = useMemo(() => new Set(selectedRowIds), [selectedRowIds]);
   const selectedVisibleCount = useMemo(
@@ -682,9 +689,9 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   const allVisibleSelected = visibleRowIds.length > 0 && selectedVisibleCount === visibleRowIds.length;
   const someVisibleSelected = selectedVisibleCount > 0 && !allVisibleSelected;
 
-  const activeCount = getActiveCount(visibleRows as Record<string, unknown>[]);
-  const maxOrder = getMaxOrder(visibleRows as Record<string, unknown>[]);
-  const totalCount = visibleRows.length;
+  const activeCount = getActiveCount(filteredRows as Record<string, unknown>[]);
+  const maxOrder = getMaxOrder(filteredRows as Record<string, unknown>[]);
+  const totalCount = filteredRows.length;
   const hasPendingUploads = useMemo(
     () => Object.values(uploadStates).some((uploadState) => uploadState.loading),
     [uploadStates],
@@ -695,6 +702,14 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
       selectAllRef.current.indeterminate = someVisibleSelected;
     }
   }, [someVisibleSelected, visibleRowIds]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [query, selectedTableKey]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
 
   async function handleSave(formData: FormData) {
     await saveAdminRecord(formData);
@@ -1122,6 +1137,33 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                         })}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-col gap-3 rounded-[20px] border border-[var(--pf-border-soft)] bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-[var(--pf-muted)]">
+                    Mostrando {visibleRows.length === 0 ? 0 : (currentPage - 1) * ADMIN_PAGE_SIZE + 1}-{Math.min(currentPage * ADMIN_PAGE_SIZE, totalCount)} de {totalCount}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={currentPage <= 1}
+                      onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                      className="rounded-full border border-[var(--pf-border-soft)] bg-white px-4 py-2 text-xs font-bold text-[var(--pf-primary-darker)] transition hover:bg-[#fff4e5] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Anterior
+                    </button>
+                    <span className="min-w-20 text-center text-xs font-black text-[var(--pf-primary-darker)]">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={currentPage >= totalPages}
+                      onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                      className="rounded-full border border-[var(--pf-border-soft)] bg-white px-4 py-2 text-xs font-bold text-[var(--pf-primary-darker)] transition hover:bg-[#fff4e5] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Siguiente
+                    </button>
                   </div>
                 </div>
               </section>

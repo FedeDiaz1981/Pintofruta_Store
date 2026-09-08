@@ -32,6 +32,11 @@ const manrope = Manrope({
 export const metadata: Metadata = {
   title: "Pintofruta",
   description: "Proyecto dinámico basado en la maqueta estática de Pintofruta.",
+  icons: {
+    icon: [{ url: "/icon.png", type: "image/png" }],
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
 };
 
 export default async function RootLayout({
