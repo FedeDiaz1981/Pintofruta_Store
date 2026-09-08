@@ -1015,6 +1015,22 @@ export async function saveAdminRecord(formData: FormData) {
   refreshAdminViews();
 }
 
+export async function saveProductImage(productId: number, image: string | null) {
+  await requireAdminViewer();
+  await ensureDatabase();
+
+  if (!Number.isInteger(productId) || productId <= 0) {
+    throw new Error("Producto inválido.");
+  }
+
+  await postgresPool!.query(
+    `update products set image = $1, updated_at = now() where id = $2 and deleted_at is null`,
+    [image, productId],
+  );
+
+  refreshAdminViews();
+}
+
 export async function deleteAdminRecord(formData: FormData) {
   await requireAdminViewer();
   await ensureDatabase();

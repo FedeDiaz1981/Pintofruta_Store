@@ -7,6 +7,7 @@ import {
   getActiveOrderExcelTemplate,
   type OrderTemplateAudience,
 } from "@/infrastructure/order-template";
+import { getTemplateRowMapKey } from "@/lib/order-template-row-map-key";
 
 export type OrderExcelRequestItem = {
   kind?: "product" | "pack";
@@ -84,7 +85,7 @@ const COLUMN_ALIASES: Record<string, string[]> = {
 const REMITO_COLUMN_ALIASES: Record<string, string[]> = {
   detail: ["detalle", "detalle / variedad", "detalle variedad", "producto", "nombre"],
   quantity: ["cant", "cantidad"],
-  price: ["precio", "precio unitario", "valor"],
+  price: ["precio", "precio unitario", "precio x unidad", "precio por unidad", "valor"],
   total: ["total", "subtotal"],
 };
 
@@ -329,12 +330,17 @@ function pickBestMatchingLine(row: ExcelJS.Row, lines: ResolvedOrderLine[], colu
   return null;
 }
 
-function getExactTemplateRow(line: ResolvedOrderLine, templateId: number | null | undefined) {
-  if (!templateId || !line.templateRowMap) {
+function getExactTemplateRow(
+  line: ResolvedOrderLine,
+  template: { id: number; template_key: string; audience: OrderTemplateAudience } | null | undefined,
+) {
+  if (!template || !line.templateRowMap) {
     return null;
   }
 
-  const rowNumber = Number(line.templateRowMap[String(templateId)]);
+  const stableKey = getTemplateRowMapKey(template);
+  const legacyKey = String(template.id);
+  const rowNumber = Number(line.templateRowMap[stableKey] ?? line.templateRowMap[legacyKey]);
   if (!Number.isFinite(rowNumber) || rowNumber <= 0) {
     return null;
   }
@@ -486,13 +492,10 @@ function buildFallbackWorkbook(lines: ResolvedOrderLine[], viewer: OrderExcelVie
   };
 
   const baseColumns = [
-    { header: "SKU", key: "sku", width: 18 },
-    { header: "Producto", key: "name", width: 34 },
-    { header: "Marca", key: "brand", width: 20 },
-    { header: "Presentación", key: "presentation", width: 20 },
-    { header: "Cantidad", key: "quantity", width: 12 },
-    { header: "Precio unitario", key: "unitPrice", width: 18 },
-    { header: "Subtotal", key: "subtotal", width: 18 },
+    { header: "Detalle", key: "detail", width: 56 },
+    { header: "Cant", key: "quantity", width: 12 },
+    { header: "Precio", key: "unitPrice", width: 18 },
+    { header: "Total", key: "total", width: 18 },
   ] as const;
 
   const summary = [
@@ -503,10 +506,7 @@ function buildFallbackWorkbook(lines: ResolvedOrderLine[], viewer: OrderExcelVie
     ["Total", formatCurrencyValue(lines.reduce((sum, line) => sum + line.subtotal, 0))],
   ];
 
-  for (const [sheetName, subtitle] of [
-    ["PEDIDO CLIENTE", "Listado de productos seleccionados"],
-    ["REMITO", "Registro del pedido"],
-  ] as const) {
+  for (const [sheetName, subtitle] of [["REMITO", "Registro del pedido"]] as const) {
     const sheet = workbook.addWorksheet(sheetName, {
       views: [{ state: "frozen", ySplit: 6 }],
       pageSetup: { orientation: "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
@@ -516,7 +516,7 @@ function buildFallbackWorkbook(lines: ResolvedOrderLine[], viewer: OrderExcelVie
     sheet.properties.defaultRowHeight = 22;
     sheet.getRow(1).height = 28;
 
-    sheet.mergeCells("A1:G1");
+    sheet.mergeCells("A1:D1");
     sheet.getCell("A1").value = `PintoFruta - ${sheetName}`;
     sheet.getCell("A1").font = { bold: true, size: 18, color: { argb: "FFFFFFFF" } };
     sheet.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: palette.dark } };
@@ -528,7 +528,7 @@ function buildFallbackWorkbook(lines: ResolvedOrderLine[], viewer: OrderExcelVie
       right: { style: "thin", color: { argb: palette.dark } },
     };
 
-    sheet.mergeCells("A2:G2");
+    sheet.mergeCells("A2:D2");
     sheet.getCell("A2").value = subtitle;
     sheet.getCell("A2").font = { italic: true, size: 11, color: { argb: palette.muted } };
     sheet.getCell("A2").alignment = { vertical: "middle", horizontal: "left" };
@@ -561,16 +561,7 @@ function buildFallbackWorkbook(lines: ResolvedOrderLine[], viewer: OrderExcelVie
 
     lines.forEach((line, index) => {
       const row = sheet.getRow(9 + index);
-      row.values = [
-        undefined,
-        line.sku,
-        line.name,
-        line.brand,
-        line.presentation,
-        line.quantity,
-        line.unitPrice,
-        line.subtotal,
-      ];
+      row.values = [line.name, line.quantity, line.unitPrice, line.subtotal];
       row.eachCell((cell, columnNumber) => {
         cell.border = {
           top: { style: "thin", color: { argb: palette.border } },
@@ -578,12 +569,20 @@ function buildFallbackWorkbook(lines: ResolvedOrderLine[], viewer: OrderExcelVie
           bottom: { style: "thin", color: { argb: palette.border } },
           right: { style: "thin", color: { argb: palette.border } },
         };
-        cell.alignment = { vertical: "middle", horizontal: columnNumber >= 6 ? "right" : "left" };
+        cell.alignment = { vertical: "middle", horizontal: columnNumber > 1 ? "right" : "left" };
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: index % 2 === 0 ? "FFFCF8F2" : "FFF8F1E7" } };
       });
-      row.getCell(6).numFmt = '#,##0';
-      row.getCell(7).numFmt = '#,##0';
+      row.getCell(2).numFmt = '#,##0';
+      row.getCell(3).numFmt = '#,##0';
+      row.getCell(4).numFmt = '#,##0';
           });
+
+    const totalRow = sheet.getRow(9 + lines.length + 1);
+    totalRow.getCell(1).value = "TOTAL";
+    totalRow.getCell(1).font = { bold: true, color: { argb: palette.dark } };
+    totalRow.getCell(4).value = lines.reduce((sum, line) => sum + line.subtotal, 0);
+    totalRow.getCell(4).font = { bold: true, color: { argb: palette.dark } };
+    totalRow.getCell(4).numFmt = '#,##0';
   }
 
   return workbook;
@@ -716,7 +715,11 @@ function findHeaderRow(
   return null;
 }
 
-function markSelectedRows(sheet: ExcelJS.Worksheet, lines: ResolvedOrderLine[], templateId: number | null | undefined) {
+function markSelectedRows(
+  sheet: ExcelJS.Worksheet,
+  lines: ResolvedOrderLine[],
+  template: { id: number; template_key: string; audience: OrderTemplateAudience } | null | undefined,
+) {
   const headerRow = findHeaderRow(sheet, 2, 20);
   if (!headerRow) {
     return false;
@@ -739,7 +742,7 @@ function markSelectedRows(sheet: ExcelJS.Worksheet, lines: ResolvedOrderLine[], 
   const lineMap = buildLookupMap(lines);
   const exactRowMap = new Map<number, ResolvedOrderLine>();
   for (const line of lines) {
-    const exactRow = getExactTemplateRow(line, templateId);
+    const exactRow = getExactTemplateRow(line, template);
     if (exactRow) {
       exactRowMap.set(exactRow, line);
     }
@@ -1022,32 +1025,23 @@ function populateWorkbook(
   lines: ResolvedOrderLine[],
   viewer: OrderExcelViewer,
   generatedAt: string,
-  templateId?: number | null,
 ) {
-  const sheets = workbook.worksheets;
-  const firstSheet = sheets[0] ?? workbook.addWorksheet("PEDIDO CLIENTE");
-  const secondSheet = sheets[1] ?? workbook.addWorksheet("REMITO");
+  const remitoSheet =
+    workbook.worksheets.find((sheet) => normalizeHeader(sheet.name) === "remito") ??
+    workbook.worksheets[1] ??
+    workbook.worksheets[0] ??
+    workbook.addWorksheet("REMITO");
 
-  const marked = markSelectedRows(firstSheet, lines, templateId ?? null);
-  if (!marked && firstSheet.actualRowCount === 0) {
-    firstSheet.columns = [
-      { header: "SKU", key: "sku", width: 18 },
-      { header: "Producto", key: "name", width: 34 },
-      { header: "Marca", key: "brand", width: 20 },
-      { header: "Presentación", key: "presentation", width: 20 },
-      { header: "Cantidad", key: "quantity", width: 12 },
-      { header: "Precio unitario", key: "unitPrice", width: 18 },
-      { header: "Subtotal", key: "subtotal", width: 18 },
-    ];
-    firstSheet.getCell("A1").value = "Pedido seleccionado";
-    firstSheet.getCell("A1").font = { bold: true, size: 16 };
-    firstSheet.addRow(["SKU", "Producto", "Marca", "Presentación", "Cantidad", "Precio unitario", "Subtotal"]);
-    lines.forEach((line) => {
-      firstSheet.addRow([line.sku, line.name, line.brand, line.presentation, line.quantity, line.unitPrice, line.subtotal]);
-    });
+  remitoSheet.name = "REMITO";
+
+  // The remito is the only customer-facing export sheet.
+  for (const sheet of [...workbook.worksheets]) {
+    if (sheet.id !== remitoSheet.id) {
+      workbook.removeWorksheet(sheet.id);
+    }
   }
 
-  writeRegisterSheet(secondSheet, lines, viewer, generatedAt);
+  writeRegisterSheet(remitoSheet, lines, viewer, generatedAt);
 }
 
 export async function buildOrderExcelFile({
@@ -1125,7 +1119,7 @@ export async function buildOrderExcelFile({
       traceExcel("build:workbook-load:done");
       console.info("[pedido/excel] build:populate:start", { templateId: template.id });
       traceExcel("build:populate:start", { templateId: template.id });
-      populateWorkbook(workbook, lines, viewer, generatedAt, template.id);
+      populateWorkbook(workbook, lines, viewer, generatedAt);
       console.info("[pedido/excel] build:populate:done");
       traceExcel("build:populate:done");
       console.info("[pedido/excel] build:write-buffer:start");

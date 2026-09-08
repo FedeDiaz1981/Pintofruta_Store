@@ -1,6 +1,9 @@
+import { cache } from "react";
 import { getSiteContent } from "@/infrastructure/site-content.repository";
+import { postgresPool } from "@/infrastructure/db/postgres";
+import { type BannerRow, type BrandRow, type CategoryRow } from "@/infrastructure/site-content/mappers";
+import type { QueryResultRow } from "pg";
 import type {
-  BrandItem,
   CatalogFilters,
   CategoryItem,
   BannerItem,
@@ -117,6 +120,52 @@ function buildDynamicMenu<T extends { name: string }>(
     groups,
   };
 }
+
+async function readRows<T extends QueryResultRow>(sql: string) {
+  if (!postgresPool) {
+    return [] as T[];
+  }
+
+  const result = await postgresPool.query<T>(sql);
+  return result.rows;
+}
+
+const getHeaderFacetData = cache(async () => {
+  if (!postgresPool) {
+    return {
+      brands: [] as BrandRow[],
+      categories: [] as CategoryRow[],
+    };
+  }
+
+  try {
+    const [brands, categories] = await Promise.all([
+      readRows<BrandRow>("select id, code, name, image, featured, active from brands order by featured desc, name"),
+      readRows<CategoryRow>("select id, name, slug, visible, home_menu, icon from categories where deleted_at is null order by id"),
+    ]);
+
+    return { brands, categories };
+  } catch (error) {
+    console.warn("[catalog] header-facets-unavailable", error instanceof Error ? error.message : error);
+    return {
+      brands: [] as BrandRow[],
+      categories: [] as CategoryRow[],
+    };
+  }
+});
+
+const getActiveBannerRows = cache(async () => {
+  if (!postgresPool) {
+    return [] as BannerRow[];
+  }
+
+  try {
+    return await readRows<BannerRow>("select id, text, order_index, active from banners order by order_index, id");
+  } catch (error) {
+    console.warn("[catalog] banners-unavailable", error instanceof Error ? error.message : error);
+    return [] as BannerRow[];
+  }
+});
 
 function filterCatalogProducts(products: ProductItem[], filters: CatalogFilters = {}) {
   const query = normalizeText(filters.query);
@@ -301,12 +350,12 @@ function buildTrendingProducts(products: ProductItem[], limit = 12) {
 }
 
 export async function getDynamicHeaderMenus(): Promise<DynamicHeaderMenu[]> {
-  const content = await getSiteContent();
-  const activeBrands = content.brands.filter((brand) => brand.active !== false);
-  const visibleCategories = (content.categories ?? []).filter((category) => category.visible);
+  const { brands, categories } = await getHeaderFacetData();
+  const activeBrands = brands.filter((brand) => brand.active !== false);
+  const visibleCategories = (categories ?? []).filter((category) => category.visible);
 
   return [
-    buildDynamicMenu<BrandItem>(activeBrands, {
+    buildDynamicMenu(activeBrands, {
       key: "brands",
       label: "Marcas",
       href: "/galeria?brand=",
@@ -322,10 +371,16 @@ export async function getDynamicHeaderMenus(): Promise<DynamicHeaderMenu[]> {
 }
 
 export async function getActiveSiteBanners(): Promise<BannerItem[]> {
-  const content = await getSiteContent();
+  const banners = await getActiveBannerRows();
 
-  return [...(content.banners ?? [])]
+  return [...(banners ?? [])]
     .filter((item) => item.active && item.text.trim().length > 0)
+    .map((item) => ({
+      id: item.id,
+      text: item.text,
+      order: item.order_index,
+      active: item.active,
+    }))
     .sort((left, right) => left.order - right.order);
 }
 

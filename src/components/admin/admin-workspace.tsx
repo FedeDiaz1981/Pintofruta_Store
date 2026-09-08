@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteAdminRecord, deleteAdminRecords, saveAdminRecord } from "@/app/admin/actions";
 import { ExcelImportButton } from "@/components/admin/excel-import-button";
 import { OrderExcelTemplateButton } from "@/components/admin/order-excel-template-button";
+import { ProductImageManager } from "@/components/admin/product-image-manager";
 import type {
   AdminCrudViewModel,
   AdminFieldDefinition,
@@ -13,6 +14,7 @@ import type {
 } from "@/application/admin-crud";
 import type { ProductItem } from "@/domain/site-content";
 import { formatCurrency } from "@/lib/catalog";
+import { getTemplateRowMapKey } from "@/lib/order-template-row-map-key";
 
 type DraftRecord = Record<string, string | number | boolean | null>;
 
@@ -642,6 +644,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   const [uploadStates, setUploadStates] = useState<Record<string, UploadState>>({});
   const [selectedRowId, setSelectedRowId] = useState("");
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
+  const [imageManagerOpen, setImageManagerOpen] = useState(false);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [bulkDeleteState, setBulkDeleteState] = useState<BulkDeleteState | null>(null);
   const selectAllRef = useRef<HTMLInputElement | null>(null);
@@ -868,6 +871,18 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
               );
             })}
           </nav>
+
+          <button
+            type="button"
+            onClick={() => setImageManagerOpen(true)}
+            className="mt-6 flex w-full items-center justify-between rounded-[18px] border border-white/10 bg-white/10 px-4 py-4 text-left text-[#f8f1e7]/90 transition hover:bg-white/15"
+          >
+            <span>
+              <span className="block text-sm font-semibold">Imagenes de productos</span>
+              <span className="mt-1 block text-xs text-[#f8f1e7]/60">Cargar y ordenar fotos</span>
+            </span>
+            <span className="text-lg" aria-hidden="true">▧</span>
+          </button>
 
         </aside>
 
@@ -1114,6 +1129,15 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
           </div>
         </section>
       </div>
+
+      {imageManagerOpen ? (
+        <div className="fixed inset-0 z-[13000] flex items-start justify-center overflow-y-auto bg-[#2d1f1480] px-4 py-6 backdrop-blur-sm lg:px-8 lg:py-10">
+          <ProductImageManager
+            products={productSelectionRows}
+            onClose={() => setImageManagerOpen(false)}
+          />
+        </div>
+      ) : null}
 
       {bulkDeleteState?.open ? (
         <div className="fixed inset-0 z-[12050] flex items-start justify-center bg-[#2d1f1470] px-4 py-6 pt-[96px] backdrop-blur-sm lg:pt-[136px]">
@@ -1474,7 +1498,19 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                     }
 
                     const templateRowMap = parseTemplateRowMap(value);
-                    const templates = model.orderExcelTemplates ?? [];
+                    const templates = (() => {
+                      const activeTemplates = (model.orderExcelTemplates ?? []).filter((template) => template.active);
+                      const uniqueTemplates = new Map<string, (typeof activeTemplates)[number]>();
+
+                      for (const template of activeTemplates) {
+                        const stableKey = getTemplateRowMapKey(template);
+                        if (!uniqueTemplates.has(stableKey)) {
+                          uniqueTemplates.set(stableKey, template);
+                        }
+                      }
+
+                      return [...uniqueTemplates.values()];
+                    })();
 
                     return (
                       <div key={field.key} className="md:col-span-2">
@@ -1493,12 +1529,13 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                           <div className="space-y-3 rounded-[22px] border border-[var(--pf-border-soft)] bg-white p-4">
                             <div className="grid gap-3 md:grid-cols-2">
                               {templates.map((template) => {
-                                const key = String(template.id);
-                                const currentValue = templateRowMap[key] ?? "";
+                                const stableKey = getTemplateRowMapKey(template);
+                                const legacyKey = String(template.id);
+                                const currentValue = templateRowMap[stableKey] ?? templateRowMap[legacyKey] ?? "";
 
                                 return (
                                   <label
-                                    key={key}
+                                    key={stableKey}
                                     className="rounded-[18px] border border-[var(--pf-border-soft)] bg-[rgba(248,242,232,0.55)] p-4"
                                   >
                                     <div className="mb-2 flex items-start justify-between gap-3">
@@ -1532,17 +1569,22 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                                             const nextMap = { ...templateRowMap };
 
                                             if (!rawValue) {
-                                              delete nextMap[key];
+                                              delete nextMap[stableKey];
+                                              delete nextMap[legacyKey];
                                               return nextMap;
                                             }
 
                                             const nextRowNumber = Math.floor(Number(rawValue));
                                             if (Number.isFinite(nextRowNumber) && nextRowNumber > 0) {
-                                              nextMap[key] = nextRowNumber;
+                                              nextMap[stableKey] = nextRowNumber;
+                                              if (legacyKey !== stableKey) {
+                                                delete nextMap[legacyKey];
+                                              }
                                               return nextMap;
                                             }
 
-                                            delete nextMap[key];
+                                            delete nextMap[stableKey];
+                                            delete nextMap[legacyKey];
                                             return nextMap;
                                           })();
 

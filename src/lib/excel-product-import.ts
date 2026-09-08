@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { appendFileSync } from "node:fs";
 import type { PoolClient } from "pg";
 import { postgresPool } from "@/infrastructure/db/postgres";
 import { siteContentSchemaSql } from "@/infrastructure/site-content/schema";
@@ -147,6 +148,16 @@ const categorySynonymMap: Record<string, string[]> = {
   kosher: ["kosher"],
   natural: ["naturales", "natural"],
 };
+
+function traceExcelImport(step: string, details: Record<string, unknown> = {}) {
+  const line = `${new Date().toISOString()} ${step} ${JSON.stringify(details)}\n`;
+  try {
+    appendFileSync("excel-import-trace.log", line, "utf8");
+  } catch {
+    // Solo trazas locales de diagnóstico.
+  }
+  console.info(`[excel-import] ${step}`, details);
+}
 
 function collapseWhitespace(value: string) {
   return value.replace(/\s+/g, " ").trim();
@@ -359,14 +370,12 @@ function buildProductRowLookup(product: DbProductRow, mode: ExcelImportMode) {
   } satisfies SourceWorkbookRow;
 }
 
-function findMatchingProduct(row: SourceWorkbookRow, products: DbProductRow[]) {
+function findMatchingProduct(row: SourceWorkbookRow, products: Map<string, DbProductRow>) {
   const rowKeys = buildAlternativeProductKeys(row);
 
-  for (const product of products) {
-    const productRow = buildProductRowLookup(product, "guest");
-    const productKeys = buildAlternativeProductKeys(productRow);
-
-    if (rowKeys.some((key) => productKeys.includes(key))) {
+  for (const key of rowKeys) {
+    const product = products.get(key);
+    if (product) {
       return product;
     }
   }
@@ -487,6 +496,7 @@ async function loadCatalogState(client: PoolClient) {
 
 function buildExistingMaps(products: DbProductRow[], brands: DbBrandRow[], categories: DbCategoryRow[]) {
   const productMap = new Map<string, DbProductRow>();
+  const productAliasMap = new Map<string, DbProductRow>();
   const brandMap = new Map<string, DbBrandRow>();
   const categoryMap = new Map<string, DbCategoryRow>();
 
@@ -501,6 +511,13 @@ function buildExistingMaps(products: DbProductRow[], brands: DbBrandRow[], categ
     for (const key of keys) {
       if (key && !productMap.has(key)) {
         productMap.set(key, product);
+      }
+    }
+
+    const aliasKeys = buildAlternativeProductKeys(buildProductRowLookup(product, "guest"));
+    for (const key of aliasKeys) {
+      if (key && !productAliasMap.has(key)) {
+        productAliasMap.set(key, product);
       }
     }
   }
@@ -525,7 +542,7 @@ function buildExistingMaps(products: DbProductRow[], brands: DbBrandRow[], categ
     }
   }
 
-  return { productMap, brandMap, categoryMap };
+  return { productMap, productAliasMap, brandMap, categoryMap };
 }
 
 function buildPlanWithCatalog(params: {
@@ -535,16 +552,17 @@ function buildPlanWithCatalog(params: {
   workbookRows: SourceWorkbookRow[];
   warnings: string[];
   productMap: Map<string, DbProductRow>;
+  productAliasMap: Map<string, DbProductRow>;
   brandMap: Map<string, DbBrandRow>;
   categoryMap: Map<string, DbCategoryRow>;
   categories: DbCategoryRow[];
 }) {
-  const { fileName, mode, sheetName, workbookRows, warnings, productMap, brandMap, categoryMap, categories } = params;
+  const { fileName, mode, sheetName, workbookRows, warnings, productMap, productAliasMap, brandMap, categoryMap, categories } = params;
   const rows: PreviewRow[] = [];
   const plannedBrands = new Map<string, PlannedBrand>();
   const plannedCategories = new Map<string, PlannedCategory>();
   const plannedProducts = new Map<string, PlannedProduct>();
-  const productList = [...productMap.values()];
+  const categoryResolutionCache = new Map<string, DbCategoryRow | null>();
 
   const nextProductIdStart = Math.max(0, ...[...productMap.values()].map((product) => product.id)) + 1;
   const nextCategoryIdStart = Math.max(0, ...[...categoryMap.values()].map((category) => category.id)) + 1;
@@ -555,11 +573,19 @@ function buildPlanWithCatalog(params: {
   for (const sourceRow of workbookRows) {
     const brandKey = normalizeText(sourceRow.brand);
     const brandRow = brandMap.get(brandKey);
-    const categoryRow =
-      resolveCategoryFromText(`${sourceRow.detail} ${sourceRow.section} ${sourceRow.brand}`, categories) ??
-      resolveFallbackCategory(categories) ??
-      categoryMap.get(normalizeText(sourceRow.categoryLabel));
-    const matchedProduct = productMap.get(sourceRow.productKey) ?? findMatchingProduct(sourceRow, productList);
+    const categoryLookupText = normalizeText(`${sourceRow.detail} ${sourceRow.section} ${sourceRow.brand}`);
+    let categoryRow = categoryResolutionCache.get(categoryLookupText);
+
+    if (categoryRow === undefined) {
+      categoryRow =
+        resolveCategoryFromText(`${sourceRow.detail} ${sourceRow.section} ${sourceRow.brand}`, categories) ??
+        resolveFallbackCategory(categories) ??
+        categoryMap.get(normalizeText(sourceRow.categoryLabel)) ??
+        null;
+      categoryResolutionCache.set(categoryLookupText, categoryRow);
+    }
+
+    const matchedProduct = productMap.get(sourceRow.productKey) ?? productAliasMap.get(sourceRow.productKey) ?? findMatchingProduct(sourceRow, productAliasMap);
 
     const brandId = brandRow?.id ?? buildBrandCode(sourceRow.brand);
     let categoryId = categoryRow?.id ?? 0;
@@ -850,15 +876,63 @@ async function applyImportPlan(plan: {
     await client.query("begin");
 
     for (const brand of plan.plannedBrands.values()) {
-      await upsertBrand(client, brand);
+      traceExcelImport("apply:brand:start", { id: brand.id, code: brand.code, active: brand.active });
+      try {
+        await upsertBrand(client, brand);
+        traceExcelImport("apply:brand:done", { id: brand.id, code: brand.code, active: brand.active });
+      } catch (error) {
+        traceExcelImport("apply:brand:error", {
+          id: brand.id,
+          code: brand.code,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
     }
 
     for (const category of plan.plannedCategories.values()) {
-      await upsertCategory(client, category);
+      traceExcelImport("apply:category:start", { id: category.id, slug: category.slug, visible: category.visible });
+      try {
+        await upsertCategory(client, category);
+        traceExcelImport("apply:category:done", { id: category.id, slug: category.slug, visible: category.visible });
+      } catch (error) {
+        traceExcelImport("apply:category:error", {
+          id: category.id,
+          slug: category.slug,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
     }
 
     for (const product of plan.plannedProducts.values()) {
-      await upsertProduct(client, product, plan.mode);
+      traceExcelImport("apply:product:start", {
+        id: product.id,
+        sku: product.sku,
+        brand: product.brand,
+        categoryId: product.category_id,
+        mode: plan.mode,
+      });
+      try {
+        await upsertProduct(client, product, plan.mode);
+        traceExcelImport("apply:product:done", {
+          id: product.id,
+          sku: product.sku,
+          brand: product.brand,
+          categoryId: product.category_id,
+          mode: plan.mode,
+        });
+      } catch (error) {
+        traceExcelImport("apply:product:error", {
+          id: product.id,
+          sku: product.sku,
+          brand: product.brand,
+          categoryId: product.category_id,
+          mode: plan.mode,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
     }
 
     await client.query("commit");
@@ -871,24 +945,38 @@ async function applyImportPlan(plan: {
 }
 
 export async function buildExcelImportPlan(file: File, mode: ExcelImportMode) {
+  traceExcelImport("plan:start", { fileName: file.name, mode, size: file.size });
   await ensureDatabase();
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const workbook = XLSX.read(buffer, { type: "buffer" });
   const sheetName = workbook.SheetNames.includes("PEDIDO CLIENTE") ? "PEDIDO CLIENTE" : workbook.SheetNames[0] ?? "Sheet1";
+  traceExcelImport("plan:workbook", { sheetNames: workbook.SheetNames, chosenSheet: sheetName });
   const sheet = workbook.Sheets[sheetName];
 
   if (!sheet) {
+    traceExcelImport("plan:error", { message: "No se encontró la hoja PEDIDO CLIENTE." });
     throw new Error("No se encontró la hoja PEDIDO CLIENTE.");
   }
 
   const { rows: workbookRows, warnings: parseWarnings } = extractWorkbookRows(sheet);
+  traceExcelImport("plan:parsed", {
+    fileName: file.name,
+    mode,
+    workbookRows: workbookRows.length,
+    warnings: parseWarnings.length,
+  });
 
   const client = await postgresPool!.connect();
 
   try {
     const catalog = await loadCatalogState(client);
-    const { productMap, brandMap, categoryMap } = buildExistingMaps(catalog.products, catalog.brands, catalog.categories);
+    traceExcelImport("plan:catalog", {
+      products: catalog.products.length,
+      brands: catalog.brands.length,
+      categories: catalog.categories.length,
+    });
+    const { productMap, productAliasMap, brandMap, categoryMap } = buildExistingMaps(catalog.products, catalog.brands, catalog.categories);
     const { plan, plannedBrands, plannedCategories, plannedProducts } = buildPlanWithCatalog({
       fileName: file.name,
       mode,
@@ -896,9 +984,25 @@ export async function buildExcelImportPlan(file: File, mode: ExcelImportMode) {
       workbookRows,
       warnings: parseWarnings,
       productMap,
+      productAliasMap,
       brandMap,
       categoryMap,
       categories: catalog.categories,
+    });
+
+    traceExcelImport("plan:done", {
+      fileName: file.name,
+      mode,
+      totalRows: plan.totalRows,
+      parsedRows: plan.parsedRows,
+      createdProducts: plan.createdProducts,
+      updatedProducts: plan.updatedProducts,
+      createdBrands: plan.createdBrands,
+      createdCategories: plan.createdCategories,
+      ignoredRows: plan.ignoredRows,
+      plannedBrands: plannedBrands.size,
+      plannedCategories: plannedCategories.size,
+      plannedProducts: plannedProducts.size,
     });
 
     return {
@@ -915,13 +1019,22 @@ export async function buildExcelImportPlan(file: File, mode: ExcelImportMode) {
 }
 
 export async function applyExcelImport(file: File, mode: ExcelImportMode) {
+  traceExcelImport("apply:start", { fileName: file.name, mode, size: file.size });
   const { plan, internal } = await buildExcelImportPlan(file, mode);
+  traceExcelImport("apply:plan", {
+    fileName: file.name,
+    mode,
+    plannedBrands: internal.plannedBrands.size,
+    plannedCategories: internal.plannedCategories.size,
+    plannedProducts: internal.plannedProducts.size,
+  });
   await applyImportPlan({
     plannedBrands: internal.plannedBrands,
     plannedCategories: internal.plannedCategories,
     plannedProducts: internal.plannedProducts,
     mode,
   });
+  traceExcelImport("apply:done", { fileName: file.name, mode });
 
   return plan;
 }

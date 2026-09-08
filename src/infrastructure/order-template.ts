@@ -1,6 +1,5 @@
 import { createSupabaseServiceClient } from "@/infrastructure/auth/pintofruta-auth";
 import { postgresPool } from "@/infrastructure/db/postgres";
-import { siteContentSchemaSql } from "@/infrastructure/site-content/schema";
 import { storeFileOnSupabase } from "@/infrastructure/storage/supabase-storage";
 
 export type OrderTemplateAudience = "guest" | "member";
@@ -31,26 +30,10 @@ export type SaveOrderExcelTemplateInput = {
   notes?: string | null;
 };
 
-let schemaReadyPromise: Promise<void> | null = null;
-
-async function ensureSchema() {
-  if (!postgresPool) {
-    return;
-  }
-
-  if (!schemaReadyPromise) {
-    schemaReadyPromise = postgresPool.query(siteContentSchemaSql).then(() => undefined);
-  }
-
-  await schemaReadyPromise;
-}
-
 export async function getActiveOrderExcelTemplate(audience: OrderTemplateAudience) {
   if (!postgresPool) {
     return null;
   }
-
-  await ensureSchema();
 
   const result = await postgresPool.query<OrderExcelTemplateRecord>(
     `
@@ -73,14 +56,13 @@ export async function listOrderExcelTemplates() {
     return [] as OrderExcelTemplateSummary[];
   }
 
-  await ensureSchema();
-
   const result = await postgresPool.query<OrderExcelTemplateSummary>(
     `
-      select id, template_key, audience, version, file_name, active, updated_at
+      select distinct on (audience) id, template_key, audience, version, file_name, active, updated_at
       from order_excel_templates
       where template_key = 'pedido_excel'
-      order by audience, active desc, version desc, updated_at desc, id desc
+        and active = true
+      order by audience, version desc, updated_at desc, id desc
     `,
   );
 
@@ -107,8 +89,6 @@ export async function saveOrderExcelTemplate(input: SaveOrderExcelTemplateInput)
   if (!postgresPool) {
     throw new Error("No hay conexion a la base de datos.");
   }
-
-  await ensureSchema();
 
   const templateKey = "pedido_excel";
   const adminLog = (stage: string, details: Record<string, unknown> = {}) => {

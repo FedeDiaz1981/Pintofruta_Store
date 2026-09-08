@@ -27,6 +27,14 @@ export async function POST(request: Request) {
     const mode = parseMode(formData.get("mode"));
     const fileEntry = formData.get("file");
 
+    console.info("[admin-excel-import] request:start", {
+      action,
+      mode,
+      hasFile: fileEntry instanceof File,
+      fileName: fileEntry instanceof File ? fileEntry.name : null,
+      fileSize: fileEntry instanceof File ? fileEntry.size : null,
+    });
+
     if (!(fileEntry instanceof File)) {
       return Response.json({ ok: false, error: "Falta el archivo Excel." }, { status: 400 });
     }
@@ -52,6 +60,10 @@ export async function POST(request: Request) {
       plan: result.plan,
     });
   } catch (error) {
+    console.error("[admin-excel-import] request:error", {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return Response.json(
       {
         ok: false,

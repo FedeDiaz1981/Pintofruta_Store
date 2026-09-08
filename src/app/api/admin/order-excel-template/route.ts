@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentViewer } from "@/infrastructure/auth/pintofruta-auth";
 import { saveOrderExcelTemplate } from "@/infrastructure/order-template";
+import { syncProductsWithUploadedTemplateRowMaps } from "@/application/order-template-row-map";
 
 export const runtime = "nodejs";
 
@@ -49,6 +50,12 @@ export async function POST(request: Request) {
       notes,
     });
 
+    const syncResult = await syncProductsWithUploadedTemplateRowMaps(fileEntry, audience);
+    console.info("[admin-order-template] template-row-sync", {
+      audience,
+      updatedProducts: syncResult.updatedProducts,
+    });
+
     refreshAdminViews();
 
     return Response.json({
@@ -56,6 +63,7 @@ export async function POST(request: Request) {
       message: `Plantilla cargada correctamente para ${audience === "member" ? "logueados" : "invitados"}.`,
       template: result.record,
       publicUrl: result.publicUrl,
+      syncedProducts: syncResult.updatedProducts,
     });
   } catch (error) {
     return Response.json(

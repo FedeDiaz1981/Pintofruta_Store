@@ -23,7 +23,7 @@ import { fallbackSiteContent, seedLockKey, toSeedBrandRows, toSeedNavigationRows
 import { siteContentSchemaSql } from "@/infrastructure/site-content/schema";
 import { resolveCategoryIconKey } from "@/lib/category-icons";
 
-const ensureSchema = cache(async () => {
+export const ensureSchema = cache(async () => {
   if (!postgresPool) {
     return;
   }
@@ -308,6 +308,8 @@ export const getSiteContent = cache(async (): Promise<SiteContentDocument> => {
   if (!contentPool) {
     return fallbackSiteContent;
   }
+
+  await ensureSchema();
 
   const [metaRows, scopesRows, sectionsRows, groupsRows, itemsRows, heroSlidesRows, bannerRows, productRows, packRows, packItemRows, brandRows, categoryRows, userRows] =
     await Promise.all([
