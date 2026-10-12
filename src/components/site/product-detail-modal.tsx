@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { recordProductView } from "@/app/catalog-actions";
 import { useViewer } from "@/components/auth/viewer-provider";
+import { useCart } from "@/components/cart/cart-context";
 import { CartAddButton } from "@/components/cart/cart-add-button";
 import type { ProductItem } from "@/domain/site-content";
 import { resolveProductUnitPrice } from "@/lib/pricing";
@@ -24,6 +25,7 @@ export function ProductDetailModal({
   const addTimerRef = useRef<number | null>(null);
   const trackedProductIdRef = useRef<number | null>(null);
   const viewer = useViewer();
+  const { items } = useCart();
   const [quantity, setQuantity] = useState(1);
   const [isAdding, setIsAdding] = useState(false);
   const [showFullDetails, setShowFullDetails] = useState(false);
@@ -118,12 +120,8 @@ export function ProductDetailModal({
   }, []);
 
   const maxQuantity = useMemo(() => {
-    if (!product?.stock || product.stock <= 0) {
-      return 99;
-    }
-
-    return product.stock;
-  }, [product]);
+    return 99;
+  }, []);
 
   const fullDescription = (product?.description || product?.detail || "").trim();
   const truncatedDescriptionLimit = 180;
@@ -135,6 +133,10 @@ export function ProductDetailModal({
   const safeQuantity = Math.min(Math.max(quantity, 1), maxQuantity);
   const unitPrice = product ? resolveProductUnitPrice(product, viewer) : 0;
   const totalPrice = product ? unitPrice * safeQuantity : 0;
+  const cartQuantity = product
+    ? items.find((item) => item.kind === "product" && item.sku === product.sku)?.quantity ?? 0
+    : 0;
+  const cartSubtotal = cartQuantity * unitPrice;
 
   return (
     <dialog
@@ -146,28 +148,28 @@ export function ProductDetailModal({
         }
       }}
     >
-      <div className="modal-box w-[min(100%,72rem)] max-w-6xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain rounded-[2rem] border border-[var(--pf-border-warm)] bg-[linear-gradient(180deg,rgba(255,251,245,0.98),rgba(249,243,232,0.98))] p-0 text-[var(--pf-text)] shadow-[0_32px_90px_rgba(74,57,38,0.22)] ring-1 ring-[rgba(255,255,255,0.35)] sm:max-h-[calc(100dvh-3rem)]">
+      <div className="modal-box w-[min(100%,72rem)] max-w-6xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain rounded-[2rem] border border-[var(--pf-border-warm)] bg-[linear-gradient(180deg,rgba(255,251,245,0.98),rgba(249,243,232,0.98))] p-0 text-[var(--pf-text)] shadow-[0_32px_90px_rgba(74,57,38,0.22)] ring-1 ring-[rgba(255,255,255,0.35)] sm:max-h-[calc(100dvh-3rem)] lg:h-[min(92dvh,52rem)] lg:max-h-none lg:overflow-hidden">
         {product ? (
-          <div className="grid gap-0 lg:grid-cols-[1.02fr_0.98fr] lg:min-h-[min(76vh,54rem)]">
-            <div className="relative bg-[linear-gradient(180deg,rgba(238,230,214,0.98),rgba(247,241,231,0.98))] p-2 sm:p-6 lg:flex lg:h-full lg:items-center lg:p-8">
-              <div className="relative aspect-[1/0.72] w-full overflow-hidden rounded-[1.5rem] border border-[rgba(255,255,255,0.72)] bg-[rgba(255,255,255,0.9)] shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_10px_30px_rgba(97,68,34,0.08)] sm:aspect-[4/5] lg:h-full lg:aspect-auto">
+          <div className="grid gap-0 lg:h-full lg:min-h-0 lg:grid-cols-[1.02fr_0.98fr]">
+            <div className="relative bg-[linear-gradient(180deg,rgba(238,230,214,0.98),rgba(247,241,231,0.98))] p-2 sm:p-5 lg:flex lg:h-full lg:min-h-0 lg:items-center lg:p-6">
+              <div className="relative aspect-[1/0.72] w-full overflow-hidden rounded-[1.5rem] border border-[rgba(255,255,255,0.72)] bg-[rgba(255,255,255,0.9)] shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_10px_30px_rgba(97,68,34,0.08)] sm:aspect-[4/5] lg:h-full lg:min-h-0 lg:aspect-auto">
                 <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.9),transparent_58%)]" />
                 <Image
                   src={publicAsset(product.image)}
                   alt={product.name}
                   fill
-                  className="object-contain object-center p-2 sm:p-6 lg:p-8"
+                  className="object-contain object-center p-2 sm:p-5 lg:p-6"
                   sizes="(max-width: 1024px) 100vw, 50vw"
                   priority
                 />
               </div>
             </div>
 
-            <div className="flex min-h-0 min-w-0 flex-col gap-4 px-4 pb-5 pt-3 sm:gap-6 sm:p-8 lg:px-10 lg:py-9">
-              <div className="flex w-full min-w-0 items-start justify-between gap-4 border-b border-[rgba(168,109,69,0.10)] pb-4">
+            <div className="flex min-w-0 flex-col gap-3 px-4 pb-4 pt-3 sm:gap-4 sm:p-6 lg:min-h-0 lg:overflow-hidden lg:px-9 lg:py-7">
+              <div className="flex w-full min-w-0 items-start justify-between gap-4 border-b border-[rgba(168,109,69,0.10)] pb-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-[0.72rem] uppercase tracking-[0.34em] text-[var(--pf-muted)]">Detalle del producto</p>
-                  <h3 className="mt-2 text-[1.55rem] font-extrabold leading-[1.04] tracking-tight text-balance text-[var(--pf-text)] sm:text-4xl lg:text-[2.55rem]">
+                  <h3 className="mt-2 line-clamp-3 text-[1.45rem] font-extrabold leading-[1.02] tracking-tight text-balance text-[var(--pf-text)] sm:text-3xl lg:text-[2.25rem]">
                     {product.name}
                   </h3>
                 </div>
@@ -179,12 +181,12 @@ export function ProductDetailModal({
               </div>
 
               {fullDescription ? (
-                <div className="w-full max-w-none border-b border-[rgba(168,109,69,0.10)] pb-4 text-sm leading-6 text-[var(--pf-muted)] sm:pb-5 sm:text-base sm:leading-7">
-                  <p className="max-w-[42rem] break-words text-pretty">{shortDescription}</p>
+                <div className="w-full max-w-none border-b border-[rgba(168,109,69,0.10)] pb-3 text-sm leading-5 text-[var(--pf-muted)] sm:text-base sm:leading-6">
+                  <p className="line-clamp-2 max-w-[42rem] break-words text-pretty">{shortDescription}</p>
                   {shouldTruncateDescription ? (
                     <button
                       type="button"
-                      className="mt-3 inline-flex items-center text-sm font-semibold text-[var(--pf-accent)] underline decoration-[rgba(168,109,69,0.45)] underline-offset-4 transition hover:opacity-80"
+                      className="mt-2 inline-flex items-center text-sm font-semibold text-[var(--pf-accent)] underline decoration-[rgba(168,109,69,0.45)] underline-offset-4 transition hover:opacity-80"
                       onClick={() => setShowFullDetails(true)}
                     >
                       Ver más
@@ -193,11 +195,16 @@ export function ProductDetailModal({
                 </div>
               ) : null}
 
-              <div className="rounded-[1.5rem] border border-[rgba(168,109,69,0.14)] bg-[rgba(255,255,255,0.72)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-[2px] sm:p-4">
+              <div className="rounded-[1.35rem] border border-[rgba(168,109,69,0.14)] bg-[rgba(255,255,255,0.72)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-[2px]">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
                   <div>
                     <p className="text-xs uppercase tracking-[0.3em] text-[var(--pf-muted)]">Cantidad</p>
-                    <p className="mt-1 max-w-md text-sm leading-5 text-[var(--pf-muted)] sm:leading-6">Elegí cuántas unidades querés agregar.</p>
+                    <p className="mt-1 max-w-md text-sm leading-5 text-[var(--pf-muted)]">Elegí cuántas unidades querés agregar.</p>
+                    {cartQuantity > 0 ? (
+                      <span className="mt-2 inline-flex rounded-full border border-[rgba(168,109,69,0.18)] bg-[rgba(168,109,69,0.09)] px-3 py-1 text-xs font-bold text-[var(--pf-primary-darker)]">
+                        Ya agregaste {cartQuantity} al carrito · {formatCurrency(cartSubtotal)}
+                      </span>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-2 self-start sm:self-auto">
                     <Button
@@ -239,12 +246,16 @@ export function ProductDetailModal({
                 </div>
               </div>
 
-              <div className="rounded-[1.75rem] border border-[rgba(212,189,156,0.45)] bg-[rgba(237,220,195,0.5)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] sm:p-5">
-                <p className="text-xs uppercase tracking-[0.34em] text-[var(--pf-muted)]">Total</p>
-                <p className="mt-2 text-[2.6rem] font-extrabold tracking-tight text-[var(--pf-text)] sm:text-[2.85rem]">{formatCurrency(totalPrice)}</p>
-                <p className="mt-1 text-sm text-[var(--pf-muted)]">
-                  {safeQuantity} x {formatCurrency(unitPrice)}
-                </p>
+              <div className="flex items-baseline justify-between gap-4 border-y border-[rgba(168,109,69,0.10)] px-1 py-2.5">
+                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-[var(--pf-muted)]">Precio unitario</p>
+                <p className="text-base font-semibold tabular-nums tracking-tight text-[var(--pf-text)]">{formatCurrency(unitPrice)}</p>
+              </div>
+
+              <div className="rounded-[1.35rem] border border-[rgba(212,189,156,0.38)] bg-[rgba(237,220,195,0.34)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.38)]">
+                <div className="flex items-end justify-between gap-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--pf-muted)]">Subtotal</p>
+                  <p className="text-[2rem] font-extrabold leading-none tabular-nums tracking-tight text-[var(--pf-text)] sm:text-[2.35rem]">{formatCurrency(totalPrice)}</p>
+                </div>
               </div>
 
               <div className="flex w-full flex-wrap gap-2">
@@ -259,13 +270,19 @@ export function ProductDetailModal({
                 {product.testeadoEnAnimales === false ? <Badge variant="outline" className="bg-[rgba(255,255,255,0.45)]">Cruelty free</Badge> : null}
               </div>
 
-              <div className="mt-auto border-t border-[rgba(168,109,69,0.10)] pt-5">
+              <div className="mt-auto border-t border-[rgba(168,109,69,0.10)] pt-3">
                 <CartAddButton
                   product={product}
                   quantity={safeQuantity}
-                  className={`w-full rounded-full py-6 text-base font-semibold normal-case shadow-[0_12px_30px_rgba(168,109,69,0.18)] transition duration-300 sm:w-auto sm:px-8 ${isAdding ? "scale-[0.98] brightness-110" : ""}`}
+                  className={`w-full rounded-full py-5 text-base font-semibold normal-case shadow-[0_12px_30px_rgba(168,109,69,0.18)] transition duration-300 sm:w-auto sm:px-8 ${isAdding ? "scale-[0.98] brightness-110" : ""}`}
+                  disabled={Boolean(product.soldOut)}
                   onClick={() => {
+                    if (product.soldOut) {
+                      return;
+                    }
+
                     setIsAdding(true);
+                    setQuantity(1);
 
                     if (addTimerRef.current !== null) {
                       window.clearTimeout(addTimerRef.current);
@@ -276,7 +293,7 @@ export function ProductDetailModal({
                     }, 220);
                   }}
                 >
-                  {isAdding ? "Agregado" : "Agregar al pedido"}
+                  {product.soldOut ? "Agotado" : isAdding ? "Agregado" : "Agregar al pedido"}
                 </CartAddButton>
               </div>
             </div>

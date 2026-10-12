@@ -143,6 +143,7 @@ export function mapSiteContentDocument(params: {
       memberPrice: product.member_price,
       image: product.image ?? undefined,
       status: product.status,
+      soldOut: product.sold_out ?? false,
       featured: product.featured,
       featuredPriority: product.featured_priority ?? undefined,
       trending: product.trending ?? undefined,

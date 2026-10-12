@@ -112,6 +112,7 @@ export type SeedProduct = {
   member_price: number;
   image: string | null;
   status: string;
+  sold_out?: boolean | null;
   featured: boolean;
   featured_priority: number | null;
   trending: boolean | null;

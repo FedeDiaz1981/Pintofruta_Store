@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "hostinger:package": "node scripts/package-hostinger.mjs",
     "hostinger:package:source": "node scripts/package-hostinger-source.mjs",
     "robot:instagram-images": "node scripts/instagram-image-robot.mjs",

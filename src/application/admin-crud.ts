@@ -217,12 +217,14 @@ export function getAdminTableDefinitions(content: SiteContentDocument): AdminTab
       rows: (content.products ?? []).map((product) => ({
         ...product,
         active: String(product.status ?? "").toLowerCase() !== "inactive",
+        soldOut: product.soldOut ?? false,
       })),
       columns: [
         { key: "id", label: "ID" },
         { key: "sku", label: "SKU" },
         { key: "name", label: "Nombre" },
         { key: "brand", label: "Marca" },
+        { key: "soldOut", label: "Agotado" },
         { key: "publicPrice", label: "Precio" },
         { key: "featuredPriority", label: "Prioridad" },
         { key: "featured", label: "Destacado" },
@@ -242,6 +244,7 @@ export function getAdminTableDefinitions(content: SiteContentDocument): AdminTab
         fileField("image", "Imagen", false, "Subí una imagen de portada para la promoción."),
         textField("presentation", "Presentación", true, "Uso interno", true, true),
         textField("status", "Estado", true, "Uso interno", true, true),
+        booleanField("soldOut", "Agotado"),
         booleanField("featured", "Destacado"),
         numberField("featuredPriority", "Prioridad destacada", false, "Más bajo = antes en el carrusel."),
         booleanField("active", "Activo"),

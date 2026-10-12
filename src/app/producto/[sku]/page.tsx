@@ -44,6 +44,11 @@ export default async function ProductPage({
         <div className="flex flex-col gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.32em] text-[var(--pf-secondary-dark)]">Ficha de producto</p>
+            {product.soldOut ? (
+              <span className="mt-3 inline-flex rounded-full border border-[rgba(216,75,57,0.18)] bg-[#d84b39] px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-white">
+                Agotado
+              </span>
+            ) : null}
             <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-[var(--pf-text)] sm:text-5xl">{product.name}</h1>
             <p className="mt-3 text-base leading-7 text-[var(--pf-muted)]">{product.description || product.detail}</p>
           </div>
@@ -67,8 +72,8 @@ export default async function ProductPage({
           </div>
 
           <div className="mt-auto flex flex-wrap gap-3">
-            <CartAddButton product={product} className={buttonVariants({ variant: "primary", size: "md" })}>
-              Agregar al pedido
+            <CartAddButton product={product} disabled={Boolean(product.soldOut)} className={buttonVariants({ variant: "primary", size: "md" })}>
+              {product.soldOut ? "Agotado" : "Agregar al pedido"}
             </CartAddButton>
             <Link href="/busqueda" className={buttonVariants({ variant: "ghost", size: "md" })}>
               Seguir buscando

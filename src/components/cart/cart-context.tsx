@@ -38,6 +38,11 @@ type CartContextValue = {
   totalPrice: number;
 };
 
+type AddNotice = {
+  name: string;
+  quantity: number;
+};
+
 const CART_STORAGE_KEY = "pintofruta_cart_v1";
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -84,6 +89,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartLine[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [addNotice, setAddNotice] = useState<AddNotice | null>(null);
   const viewer = useViewer();
 
   useEffect(() => {
@@ -103,6 +109,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
     window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
   }, [hydrated, items]);
 
+  useEffect(() => {
+    if (!addNotice) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      setAddNotice(null);
+    }, 2600);
+
+    return () => window.clearTimeout(timer);
+  }, [addNotice]);
+
   const value = useMemo<CartContextValue>(() => {
     const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
     const totalPrice = items.reduce((sum, item) => sum + item.quantity * resolveCartLineUnitPrice(item, viewer), 0);
@@ -115,8 +133,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
       closeCart: () => setIsOpen(false),
       toggleCart: () => setIsOpen((current) => !current),
       addItem: (product, quantity = 1) => {
+        if (product.soldOut) {
+          return;
+        }
+
+        const nextQuantity = Math.max(1, quantity);
+        setAddNotice({ name: product.name, quantity: nextQuantity });
         setItems((current) => {
-          const nextQuantity = Math.max(1, quantity);
           const existing = current.find((item) => item.sku === product.sku);
 
           if (existing) {
@@ -143,8 +166,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
         });
       },
       addPack: (pack, quantity = 1) => {
+        const nextQuantity = Math.max(1, quantity);
+        setAddNotice({ name: pack.title, quantity: nextQuantity });
         setItems((current) => {
-          const nextQuantity = Math.max(1, quantity);
           const sku = `PACK-${pack.id}`;
           const existing = current.find((item) => item.sku === sku);
 
@@ -185,7 +209,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
     };
   }, [hydrated, isOpen, items, viewer]);
 
-  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+  return (
+    <CartContext.Provider value={value}>
+      {children}
+      {addNotice ? (
+        <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] left-1/2 z-[13000] w-[min(calc(100vw-2rem),26rem)] -translate-x-1/2 rounded-[1.35rem] border border-[rgba(168,109,69,0.22)] bg-[rgba(255,251,245,0.98)] px-5 py-4 text-[var(--pf-text)] shadow-[0_22px_55px_rgba(74,57,38,0.22)] backdrop-blur lg:bottom-6 lg:left-auto lg:right-6 lg:translate-x-0">
+          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-[var(--pf-secondary)]">
+            Producto agregado
+          </p>
+          <p className="mt-1 text-sm font-semibold leading-5">
+            {addNotice.quantity === 1 ? "Se agregó 1 unidad" : `Se agregaron ${addNotice.quantity} unidades`} al carrito.
+          </p>
+          <p className="mt-1 line-clamp-1 text-xs text-[var(--pf-muted)]">{addNotice.name}</p>
+        </div>
+      ) : null}
+    </CartContext.Provider>
+  );
 }
 
 export function useCart() {

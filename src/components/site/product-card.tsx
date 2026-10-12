@@ -2,20 +2,19 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { useViewer } from "@/components/auth/viewer-provider";
+import { useCart } from "@/components/cart/cart-context";
 import { CartAddButton } from "@/components/cart/cart-add-button";
 import type { ProductItem } from "@/domain/site-content";
-import { isNewArrival, publicAsset } from "@/lib/catalog";
+import { formatCurrency, isNewArrival, publicAsset } from "@/lib/catalog";
+import { resolveProductUnitPrice } from "@/lib/pricing";
 
 function getInventoryLabel(product: ProductItem) {
-  if (product.stock == null) {
-    return null;
-  }
-
-  if (product.stock <= 0) {
+  if (product.soldOut) {
     return "Agotado";
   }
 
-  return `${product.stock} unidades`;
+  return null;
 }
 
 export function ProductCard({
@@ -26,16 +25,31 @@ export function ProductCard({
   onSelect?: (product: ProductItem) => void;
 }) {
   const [quickQuantity, setQuickQuantity] = useState(1);
+  const { items } = useCart();
+  const viewer = useViewer();
   const isNew = isNewArrival({
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   });
   const inventoryLabel = getInventoryLabel(product);
-  const isOutOfStock = product.stock != null ? product.stock <= 0 : product.status !== "published";
+  const isOutOfStock = Boolean(product.soldOut);
+  const cartQuantity = items.find((item) => item.kind === "product" && item.sku === product.sku)?.quantity ?? 0;
+  const unitPrice = resolveProductUnitPrice(product, viewer);
+  const cartSubtotal = cartQuantity * unitPrice;
 
   return (
     <article className="group flex h-full min-h-[24.5rem] flex-col overflow-hidden rounded-[1.5rem] border border-[rgba(74,57,38,0.16)] bg-white shadow-[0_10px_28px_rgba(74,57,38,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_38px_rgba(74,57,38,0.14)]">
-      <button type="button" onClick={() => onSelect?.(product)} className="block w-full text-left">
+      <button
+        type="button"
+        onClick={() => {
+          if (!isOutOfStock) {
+            onSelect?.(product);
+          }
+        }}
+        className={`block w-full text-left ${isOutOfStock ? "cursor-not-allowed" : ""}`}
+        disabled={isOutOfStock}
+        aria-disabled={isOutOfStock}
+      >
         <div className="relative aspect-[1/1] w-full overflow-hidden bg-[linear-gradient(180deg,rgba(252,249,243,1),rgba(246,240,230,1))]">
           <div className="absolute left-3 top-3 z-10">
             {isNew ? (
@@ -68,7 +82,17 @@ export function ProductCard({
       </button>
 
       <div className="flex flex-1 flex-col justify-between gap-3 border-t border-[rgba(74,57,38,0.08)] px-4 py-4">
-        <div className="text-center">
+        <button
+          type="button"
+          onClick={() => {
+            if (!isOutOfStock) {
+              onSelect?.(product);
+            }
+          }}
+          className={`w-full text-center ${isOutOfStock ? "cursor-not-allowed" : ""}`}
+          disabled={isOutOfStock}
+          aria-disabled={isOutOfStock}
+        >
           <h3 className="line-clamp-2 text-balance text-[0.92rem] font-semibold leading-[1.25] tracking-tight text-[var(--pf-text)] sm:text-[0.96rem]">
             {product.name}
           </h3>
@@ -77,7 +101,12 @@ export function ProductCard({
               {product.presentation}
             </p>
           ) : null}
-        </div>
+          {cartQuantity > 0 ? (
+            <span className="mt-2 inline-flex rounded-full border border-[rgba(168,109,69,0.18)] bg-[rgba(168,109,69,0.09)] px-3 py-1 text-[11px] font-bold text-[var(--pf-primary-darker)]">
+              Ya agregaste {cartQuantity} · {formatCurrency(cartSubtotal)}
+            </span>
+          ) : null}
+        </button>
 
         <div className="flex items-center justify-between gap-3 rounded-[1.1rem] border border-[rgba(168,109,69,0.14)] bg-[rgba(255,251,245,0.8)] p-2">
           <div className="flex items-center gap-1">
@@ -104,8 +133,10 @@ export function ProductCard({
             product={product}
             quantity={quickQuantity}
             className="rounded-full px-4 py-2 text-xs font-semibold normal-case shadow-none"
+            disabled={isOutOfStock}
+            onClick={() => setQuickQuantity(1)}
           >
-            Agregar
+            {isOutOfStock ? "Agotado" : "Agregar"}
           </CartAddButton>
         </div>
       </div>

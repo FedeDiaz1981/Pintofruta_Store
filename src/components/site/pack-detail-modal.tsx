@@ -164,19 +164,32 @@ export function PackDetailModal({
                 <div className="rounded-[1.5rem] border border-[var(--pf-border)] bg-[rgba(255,255,255,0.82)] p-4">
                   <p className="text-xs uppercase tracking-[0.28em] text-[var(--pf-muted)]">Incluye</p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {pack.items.map((item) => (
-                      <button
-                        key={item.productId}
-                        type="button"
-                        onClick={() => setSelectedProduct(item.product)}
-                        className="inline-flex items-center gap-2 rounded-full border border-[rgba(168,109,69,0.18)] bg-[rgba(248,242,232,0.88)] px-3 py-2 text-left text-sm font-semibold text-[var(--pf-text)] transition hover:bg-[rgba(238,230,214,0.95)]"
-                      >
-                        <span className="max-w-[14rem] truncate">{item.product.name}</span>
-                        <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-[var(--pf-primary-darker)]">
-                          x{item.quantity}
-                        </span>
-                      </button>
-                    ))}
+                    {pack.items.map((item) => {
+                      const productSoldOut = Boolean(item.product.soldOut);
+
+                      return (
+                        <button
+                          key={item.productId}
+                          type="button"
+                          onClick={() => {
+                            if (!productSoldOut) {
+                              setSelectedProduct(item.product);
+                            }
+                          }}
+                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-left text-sm font-semibold transition ${
+                            productSoldOut
+                              ? "cursor-not-allowed border-[rgba(216,75,57,0.18)] bg-[rgba(216,75,57,0.08)] text-[var(--pf-muted)]"
+                              : "border-[rgba(168,109,69,0.18)] bg-[rgba(248,242,232,0.88)] text-[var(--pf-text)] hover:bg-[rgba(238,230,214,0.95)]"
+                          }`}
+                          aria-disabled={productSoldOut}
+                        >
+                          <span className="max-w-[14rem] truncate">{item.product.name}</span>
+                          <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-[var(--pf-primary-darker)]">
+                            {productSoldOut ? "Agotado" : `x${item.quantity}`}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 

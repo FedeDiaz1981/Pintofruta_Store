@@ -30,6 +30,9 @@ export function SiteHeader({ menus }: SiteHeaderProps) {
 
   const closeAllMenus = useCallback(() => {
     setOpenMenuKey(null);
+    document.querySelectorAll<HTMLDetailsElement>('details[name="pf-header-menu"]').forEach((details) => {
+      details.open = false;
+    });
   }, []);
 
   useEffect(() => {
@@ -137,24 +140,23 @@ export function SiteHeader({ menus }: SiteHeaderProps) {
               {menus.map((menu) => (
                 <details
                   key={menu.key}
-                  className="dropdown dropdown-bottom dropdown-center relative"
-                  open={openMenuKey === menu.key}
+                  name="pf-header-menu"
+                  className="relative"
                   onToggle={(event) => {
-                    if (!(event.currentTarget as HTMLDetailsElement).open && openMenuKey === menu.key) {
-                      setOpenMenuKey(null);
-                    }
+                    setOpenMenuKey((event.currentTarget as HTMLDetailsElement).open ? menu.key : null);
                   }}
                 >
                   <summary
                     className={`${buttonVariants({ variant: "secondary", size: "md" })} flex min-h-[64px] cursor-pointer list-none justify-center rounded-none border-y border-[var(--pf-border-soft)] bg-white px-4 text-sm font-medium uppercase tracking-[0.18em] hover:bg-[rgba(248,242,232,0.7)] [&::-webkit-details-marker]:hidden`}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      setOpenMenuKey((current) => (current === menu.key ? null : menu.key));
-                    }}
                   >
                     {menu.label}
                   </summary>
-                  <div className="dropdown-content z-[10060] mt-3 w-[min(92vw,1100px)] rounded-[1.75rem] border border-[var(--pf-border)] bg-[var(--pf-surface)] p-4 shadow-[0_24px_60px_rgba(74,57,38,0.16)]">
+                  <div
+                    className={[
+                      "absolute top-full z-[10060] mt-3 max-h-[calc(100dvh-18rem)] w-[min(calc(100vw-6rem),1100px)] overflow-y-auto overscroll-contain rounded-[1.75rem] border border-[var(--pf-border)] bg-[var(--pf-surface)] p-4 shadow-[0_24px_60px_rgba(74,57,38,0.16)]",
+                      menu.key === "brands" ? "left-0" : "right-0",
+                    ].join(" ")}
+                  >
                     <div className="flex items-center justify-between gap-3 border-b border-[var(--pf-border-soft)] pb-4">
                       <div>
                         <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-[var(--pf-muted)]">{menu.label}</p>
@@ -165,11 +167,11 @@ export function SiteHeader({ menus }: SiteHeaderProps) {
                       </Link>
                     </div>
 
-                    <div className="mt-4 grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
+                    <div className="mt-4 grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
                       {menu.groups.map((group) => (
                         <div key={group.label} className="rounded-[1.25rem] border border-[var(--pf-border-soft)] bg-[rgba(255,255,255,0.55)] p-4">
                           <p className="mb-3 text-sm font-bold uppercase tracking-[0.22em] text-[var(--pf-primary-darker)]">{group.label}</p>
-                          <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
+                          <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]">
                             {group.itemsByInitial.map((bucket) => (
                               <div key={bucket.initial} className="h-full rounded-2xl border border-[var(--pf-border-soft)] bg-white/70 p-4">
                                 <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.24em] text-[var(--pf-muted)]">{bucket.initial}</p>
@@ -179,7 +181,7 @@ export function SiteHeader({ menus }: SiteHeaderProps) {
                                       <Link
                                         href={item.href}
                                         onClick={closeAllMenus}
-                                        className="block rounded-xl px-3 py-2 text-sm text-[var(--pf-text)] transition hover:bg-[rgba(168,109,69,0.08)] hover:text-[var(--pf-primary-darker)]"
+                                        className="block rounded-xl px-3 py-2 text-sm leading-5 text-[var(--pf-text)] break-words transition hover:bg-[rgba(168,109,69,0.08)] hover:text-[var(--pf-primary-darker)]"
                                       >
                                         {item.label}
                                       </Link>

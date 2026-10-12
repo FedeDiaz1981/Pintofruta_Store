@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
-import { Inter, Manrope } from "next/font/google";
 import { getActiveSiteBanners, getDynamicHeaderMenus } from "@/application/catalog";
 import { ViewerProvider } from "@/components/auth/viewer-provider";
 import { CartProvider } from "@/components/cart/cart-context";
@@ -16,18 +15,6 @@ import "./globals.css";
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 export const revalidate = 0;
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-});
-
-const manrope = Manrope({
-  variable: "--font-manrope",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-});
 
 export const metadata: Metadata = {
   title: "Pintofruta",
@@ -50,7 +37,7 @@ export default async function RootLayout({
   const viewer = await getCurrentViewer();
 
   return (
-    <html lang="es" data-theme="caramellatte" className={`${inter.variable} ${manrope.variable} h-full antialiased`}>
+    <html lang="es" data-theme="caramellatte" className="h-full antialiased">
       <body className="min-h-screen overflow-x-hidden text-base-content">
         <ViewerProvider initialViewer={viewer}>
           <CartProvider>

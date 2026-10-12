@@ -1,8 +1,9 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { deleteAdminRecord, deleteAdminRecords, saveAdminRecord } from "@/app/admin/actions";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { deleteAdminRecord, deleteAdminRecords, saveAdminRecord, setProductSoldOut } from "@/app/admin/actions";
 import { ExcelImportButton } from "@/components/admin/excel-import-button";
 import { OrderExcelTemplateButton } from "@/components/admin/order-excel-template-button";
 import { ProductImageManager } from "@/components/admin/product-image-manager";
@@ -636,9 +637,11 @@ function PackProductsField({
 
 export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   const { overview, tables, productSelectionRows } = model;
+  const router = useRouter();
   const initialTableKey = (tables.find((table) => table.key === "hero_slides")?.key ?? tables[0]?.key ?? "") as AdminTableKey;
 
   const [selectedTableKey, setSelectedTableKey] = useState<AdminTableKey>(initialTableKey);
+  const [isQuickActionPending, startQuickActionTransition] = useTransition();
   const [query, setQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [packSearch, setPackSearch] = useState("");
@@ -649,6 +652,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   const [imageManagerOpen, setImageManagerOpen] = useState(false);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [bulkDeleteState, setBulkDeleteState] = useState<BulkDeleteState | null>(null);
+  const [soldOutOverrides, setSoldOutOverrides] = useState<Record<string, boolean>>({});
   const selectAllRef = useRef<HTMLInputElement | null>(null);
 
   const selectedTable = useMemo(
@@ -662,6 +666,14 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
     () => new Map((selectedTable?.fields ?? []).map((field) => [field.key, field] as const)),
     [selectedTable],
   );
+  const visibleColumns = useMemo(
+    () =>
+      selectedTable.key === "products"
+        ? selectedTable.columns.filter((column) => ["id", "name", "brand"].includes(column.key))
+        : selectedTable.columns,
+    [selectedTable],
+  );
+  const tableMinWidthClass = selectedTable.key === "products" ? "min-w-[620px]" : "min-w-[960px]";
 
   const filteredRows = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -779,6 +791,36 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
     setSelectedRowId((current) => (current === rowId ? "" : current));
   }
 
+  function getProductSoldOut(row: Record<string, unknown>) {
+    const rowId = getRowId(selectedTable, row);
+    return soldOutOverrides[rowId] ?? Boolean(row.soldOut);
+  }
+
+  function handleProductSoldOutToggle(row: Record<string, unknown>) {
+    const productId = Number(row.id);
+
+    if (!Number.isInteger(productId) || productId <= 0) {
+      return;
+    }
+
+    const rowId = getRowId(selectedTable, row);
+    const previous = getProductSoldOut(row);
+    const next = !previous;
+
+    setSoldOutOverrides((current) => ({ ...current, [rowId]: next }));
+
+    startQuickActionTransition(() => {
+      void setProductSoldOut(productId, next)
+        .then(() => {
+          router.refresh();
+        })
+        .catch((error) => {
+          setSoldOutOverrides((current) => ({ ...current, [rowId]: previous }));
+          window.alert(error instanceof Error ? error.message : "No se pudo actualizar agotado.");
+        });
+    });
+  }
+
   function openNew(table: AdminTableDefinition) {
     setSelectedTableKey(table.key);
     setSelectedRowId("");
@@ -822,8 +864,8 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
 
   return (
     <main className="pf-admin min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,252,246,0.98),_rgba(244,235,221,0.96)_44%,_rgba(232,218,194,0.98))] text-[var(--pf-text)]">
-      <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col xl:flex-row">
-        <aside className="border-b border-[var(--pf-border)] bg-[linear-gradient(180deg,var(--pf-primary-darker)_0%,var(--pf-primary-dark)_52%,var(--pf-primary)_100%)] px-4 py-5 text-[#fff8ee] shadow-[inset_-1px_0_0_rgba(255,255,255,0.05)] xl:w-[300px] xl:border-b-0 xl:border-r xl:px-5 xl:py-6">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col xl:flex-row">
+        <aside className="border-b border-[var(--pf-border)] bg-[linear-gradient(180deg,var(--pf-primary-darker)_0%,var(--pf-primary-dark)_52%,var(--pf-primary)_100%)] px-4 py-5 text-[#fff8ee] shadow-[inset_-1px_0_0_rgba(255,255,255,0.05)] xl:w-[300px] xl:shrink-0 xl:border-b-0 xl:border-r xl:px-5 xl:py-6">
           <div className="rounded-[28px] border border-white/10 bg-white/10 p-4 shadow-[0_20px_50px_rgba(74,57,38,0.14)]">
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(180deg,var(--pf-secondary-dark)_0%,var(--pf-primary)_100%)] text-lg font-black tracking-tight text-white">
@@ -901,8 +943,8 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
 
         </aside>
 
-        <section className="flex-1 px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
-          <div className="rounded-[30px] border border-[var(--pf-border)] bg-[rgba(250,246,239,0.92)] p-5 shadow-[0_24px_60px_rgba(58,44,25,0.12)] backdrop-blur">
+        <section className="min-w-0 flex-1 px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
+          <div className="min-w-0 rounded-[30px] border border-[var(--pf-border)] bg-[rgba(250,246,239,0.92)] p-5 shadow-[0_24px_60px_rgba(58,44,25,0.12)] backdrop-blur">
             <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
               <div className="max-w-3xl">
                 <p className="text-[11px] font-black uppercase tracking-[0.36em] text-[var(--pf-secondary)]">Administracion</p>
@@ -947,7 +989,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   className="ml-3 flex-1 bg-transparent text-sm text-[var(--pf-text)] outline-none placeholder:text-[var(--pf-muted)]"
-                  placeholder="Buscar por SKU, nombre, email o estado"
+                  placeholder={selectedTable.key === "products" ? "Buscar por ID, nombre o marca" : "Buscar por SKU, nombre, email o estado"}
                 />
               </label>
 
@@ -1021,7 +1063,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
 
                 <div className="mt-5 overflow-hidden rounded-[24px] border border-[var(--pf-border-soft)] bg-white">
                   <div className="overflow-x-auto">
-                    <table className="min-w-[960px] w-full border-collapse">
+                    <table className={`${tableMinWidthClass} w-full border-collapse`}>
                       <thead className="bg-[rgba(248,242,232,0.6)]">
                         <tr>
                           <th className="border-b border-[var(--pf-border-soft)] px-4 py-4 text-left text-[11px] font-black uppercase tracking-[0.24em] text-[var(--pf-muted)]">
@@ -1050,7 +1092,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                               aria-label="Seleccionar todos los visibles"
                             />
                           </th>
-                          {selectedTable.columns.map((column) => (
+                          {visibleColumns.map((column) => (
                             <th
                               key={column.key}
                               className="border-b border-[var(--pf-border-soft)] px-5 py-4 text-left text-[11px] font-black uppercase tracking-[0.24em] text-[var(--pf-muted)]"
@@ -1094,15 +1136,22 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                                 aria-label={`Seleccionar ${String(row[selectedTable.rowLabelField] ?? rowId)}`}
                               />
                               </td>
-                              {selectedTable.columns.map((column) => {
+                              {visibleColumns.map((column) => {
                                 const field = fieldMap.get(column.key);
 
                                 return (
-                                  <td key={column.key} className="px-5 py-4 align-top text-sm text-[var(--pf-text)]">
+                                  <td
+                                    key={column.key}
+                                    className={`px-5 py-4 align-top text-sm text-[var(--pf-text)] ${
+                                      selectedTable.key === "products" && column.key === "name" ? "w-full" : ""
+                                    }`}
+                                  >
                                     <div
                                       className={
                                         field?.kind === "boolean"
                                           ? "inline-flex rounded-full bg-[rgba(168,109,69,0.12)] px-3 py-1 text-[11px] font-bold text-[var(--pf-primary-darker)]"
+                                          : selectedTable.key === "products" && column.key === "name"
+                                            ? "max-w-none break-words leading-6"
                                           : "max-w-[15rem] break-words leading-6"
                                       }
                                     >
@@ -1113,6 +1162,29 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                               })}
                               <td className="px-5 py-4 align-top">
                                 <div className="flex flex-wrap gap-2">
+                                  {selectedTable.key === "products" ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleProductSoldOutToggle(row)}
+                                      disabled={isQuickActionPending}
+                                      className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-bold transition disabled:cursor-wait disabled:opacity-60 ${
+                                        getProductSoldOut(row)
+                                          ? "border-[rgba(216,75,57,0.22)] bg-[#d84b39] text-white shadow-[0_10px_22px_rgba(216,75,57,0.18)] hover:brightness-105"
+                                          : "border-[rgba(111,69,40,0.14)] bg-[rgba(248,242,232,0.82)] text-[var(--pf-primary-darker)] hover:bg-[rgba(238,230,214,0.95)]"
+                                      }`}
+                                      aria-pressed={getProductSoldOut(row)}
+                                      title={getProductSoldOut(row) ? "Producto marcado como agotado" : "Producto disponible"}
+                                    >
+                                      <span
+                                        className={`h-2 w-2 rounded-full ${
+                                          getProductSoldOut(row) ? "bg-white" : "bg-[rgba(111,69,40,0.38)]"
+                                        }`}
+                                        aria-hidden="true"
+                                      />
+                                      Agotado
+                                    </button>
+                                  ) : null}
+
                                   <button
                                     type="button"
                                     onClick={() => openEdit(selectedTable, row)}

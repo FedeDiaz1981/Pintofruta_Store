@@ -231,6 +231,7 @@ async function saveProduct(record: PayloadRecord) {
         category_ids: unknown;
         category_names: unknown;
         status: string;
+        sold_out: boolean | null;
         image: string | null;
         featured_priority: number | null;
         trending: boolean | null;
@@ -241,7 +242,7 @@ async function saveProduct(record: PayloadRecord) {
         source_section: string | null;
         template_row_map: unknown;
       }>(
-        `select sku, presentation, category_id, category_name, category_ids, category_names, status, image,
+        `select sku, presentation, category_id, category_name, category_ids, category_names, status, sold_out, image,
                 featured_priority, stock, views_count, sales_count, description, source_section, template_row_map
          from products
          where id = $1
@@ -282,6 +283,10 @@ async function saveProduct(record: PayloadRecord) {
       ? String(existing?.status ?? "").toLowerCase() !== "inactive"
       : toBoolean(record.active);
   const status = active ? "published" : "inactive";
+  const soldOut =
+    record.soldOut == null || record.soldOut === ""
+      ? existing?.sold_out ?? false
+      : toBoolean(record.soldOut);
   const image = resolveFileValue(record.image, existing?.image ?? null);
   const featuredPriority =
     record.featuredPriority == null || record.featuredPriority === ""
@@ -304,9 +309,9 @@ async function saveProduct(record: PayloadRecord) {
       insert into products (
         id, sku, name, detail, presentation, category_id, category_name, category_ids, category_names, brand,
         vegano, kosher, testeado_en_animales, public_price, member_price, image,
-        status, featured, featured_priority, stock, views_count, sales_count, description, source_section, template_row_map
+        status, sold_out, featured, featured_priority, stock, views_count, sales_count, description, source_section, template_row_map
       ) values (
-        $1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25
+        $1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26
       )
       on conflict (id) do update set
         sku = excluded.sku,
@@ -325,6 +330,7 @@ async function saveProduct(record: PayloadRecord) {
         member_price = excluded.member_price,
         image = excluded.image,
         status = excluded.status,
+        sold_out = excluded.sold_out,
         featured = excluded.featured,
         featured_priority = excluded.featured_priority,
         stock = excluded.stock,
@@ -353,6 +359,7 @@ async function saveProduct(record: PayloadRecord) {
       toNumber(record.memberPrice),
       image,
       status,
+      soldOut,
       toBoolean(record.featured),
       featuredPriority,
       stock,
@@ -365,12 +372,28 @@ async function saveProduct(record: PayloadRecord) {
   );
 }
 
+export async function setProductSoldOut(productId: number, soldOut: boolean) {
+  await requireAdminViewer();
+  await ensureDatabase();
+
+  if (!Number.isInteger(productId) || productId <= 0) {
+    throw new Error("Producto inválido.");
+  }
+
+  await postgresPool!.query(
+    `update products set sold_out = $1, updated_at = now() where id = $2 and deleted_at is null`,
+    [soldOut, productId],
+  );
+
+  refreshAdminViews();
+}
+
 async function saveBrand(record: PayloadRecord) {
   const name = toStringValue(record.name);
   const code = toStringValue(record.code) || slugify(name);
   const id = await resolveTextId("brands", toStringValue(record.id), [toStringValue(record.id), code, name]);
-  const existingResult = await postgresPool!.query<{ featured: boolean | null }>(
-    "select featured from brands where id = $1 limit 1",
+  const existingResult = await postgresPool!.query<{ featured: boolean | null; active: boolean | null }>(
+    "select featured, active from brands where id = $1 limit 1",
     [id],
   );
   const existing = existingResult.rows[0];
@@ -378,17 +401,22 @@ async function saveBrand(record: PayloadRecord) {
     record.featured == null || record.featured === ""
       ? existing?.featured ?? false
       : toBoolean(record.featured);
+  const active =
+    record.active == null || record.active === ""
+      ? existing?.active ?? true
+      : toBoolean(record.active);
   await postgresPool!.query(
     `
-      insert into brands (id, code, name, image, featured)
-      values ($1, $2, $3, $4, $5)
+      insert into brands (id, code, name, image, featured, active)
+      values ($1, $2, $3, $4, $5, $6)
       on conflict (id) do update set
         code = excluded.code,
         name = excluded.name,
         image = excluded.image,
-        featured = excluded.featured
+        featured = excluded.featured,
+        active = excluded.active
     `, 
-    [id, code || id, name, toStringValue(record.image) || null, featured],
+    [id, code || id, name, toStringValue(record.image) || null, featured, active],
   );
 }
 

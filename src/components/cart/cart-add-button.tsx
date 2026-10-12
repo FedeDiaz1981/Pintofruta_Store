@@ -10,13 +10,19 @@ type CartAddButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   quantity?: number;
 };
 
-export function CartAddButton({ product, quantity = 1, children, onClick, ...props }: CartAddButtonProps) {
+export function CartAddButton({ product, quantity = 1, children, onClick, disabled, ...props }: CartAddButtonProps) {
   const { addItem } = useCart();
+  const isDisabled = disabled || Boolean(product.soldOut);
 
   return (
     <Button
       {...props}
+      disabled={isDisabled}
       onClick={(event) => {
+        if (isDisabled) {
+          return;
+        }
+
         addItem(product, quantity);
         onClick?.(event);
       }}

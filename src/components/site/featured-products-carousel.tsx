@@ -11,15 +11,11 @@ import { ProductDetailModal } from "@/components/site/product-detail-modal";
 import { Button } from "@/components/ui/button";
 
 function getInventoryLabel(product: ProductItem) {
-  if (product.stock == null) {
-    return null;
-  }
-
-  if (product.stock <= 0) {
+  if (product.soldOut) {
     return "Agotado";
   }
 
-  return `${product.stock} unidades`;
+  return null;
 }
 
 function getNewLabel(product: ProductItem) {
@@ -50,17 +46,23 @@ function MobileFeaturedRail({ products }: { products: ProductItem[] }) {
           {products.map((product, index) => {
             const newLabel = getNewLabel(product);
             const inventoryLabel = getInventoryLabel(product);
-            const isOutOfStock = product.stock != null ? product.stock <= 0 : product.status !== "published";
+            const isOutOfStock = Boolean(product.soldOut);
 
             return (
               <div key={product.id} className="min-w-0 flex-[0_0_66vw] px-2 pb-3">
                 <motion.button
                   type="button"
-                  onClick={() => setSelectedProduct(product)}
+                  onClick={() => {
+                    if (!isOutOfStock) {
+                      setSelectedProduct(product);
+                    }
+                  }}
                   initial={{ opacity: 0.6, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.35, delay: index * 0.03 }}
-                  className="group block h-full w-full text-left"
+                  className={`group block h-full w-full text-left ${isOutOfStock ? "cursor-not-allowed" : ""}`}
+                  disabled={isOutOfStock}
+                  aria-disabled={isOutOfStock}
                 >
                   <article className="flex h-full min-h-[21rem] flex-col overflow-hidden rounded-[1.6rem] border border-[rgba(74,57,38,0.14)] bg-white shadow-[0_10px_28px_rgba(74,57,38,0.08)]">
                     <div className="relative flex-[1.12] overflow-hidden bg-[linear-gradient(180deg,rgba(252,249,243,1),rgba(246,240,230,1))]">
@@ -177,13 +179,21 @@ export function FeaturedProductsCarousel({ products }: { products: ProductItem[]
           {products.map((product) => {
             const newLabel = getNewLabel(product);
             const inventoryLabel = getInventoryLabel(product);
-            const isOutOfStock = product.stock != null ? product.stock <= 0 : product.status !== "published";
+            const isOutOfStock = Boolean(product.soldOut);
             return (
               <button
                 key={product.id}
                 type="button"
-                onClick={() => setSelectedProduct(product)}
-                className="group block w-[min(78vw,16.75rem)] shrink-0 snap-start sm:w-[17rem] lg:w-[17.5rem]"
+                onClick={() => {
+                  if (!isOutOfStock) {
+                    setSelectedProduct(product);
+                  }
+                }}
+                className={`group block w-[min(78vw,16.75rem)] shrink-0 snap-start sm:w-[17rem] lg:w-[17.5rem] ${
+                  isOutOfStock ? "cursor-not-allowed" : ""
+                }`}
+                disabled={isOutOfStock}
+                aria-disabled={isOutOfStock}
               >
                 <article
                   data-featured-card

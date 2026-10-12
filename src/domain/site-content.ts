@@ -66,6 +66,7 @@ export interface ProductItem {
   memberPrice: number;
   image?: string;
   status: string;
+  soldOut?: boolean;
   featured: boolean;
   featuredPriority?: number;
   trending?: boolean;
