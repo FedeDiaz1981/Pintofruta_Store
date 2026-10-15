@@ -119,7 +119,7 @@ export function CartPanel({
     const url = window.URL.createObjectURL(deliveryError.blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = deliveryError.fileName || "pedido-pintofruta.xlsx";
+    anchor.download = deliveryError.fileName || "Remito.xlsm";
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -172,7 +172,7 @@ export function CartPanel({
         }
 
         const blob = await response.blob();
-        const downloadName = response.headers.get("x-file-name") || "pedido-pintofruta.xlsx";
+        const downloadName = response.headers.get("x-file-name") || "Remito.xlsm";
         const errorMessage = response.headers.get("x-email-error");
         setDeliveryError({
           fileName: downloadName,

@@ -8,6 +8,7 @@ import {
   type OrderTemplateAudience,
 } from "@/infrastructure/order-template";
 import { getTemplateRowMapKey } from "@/lib/order-template-row-map-key";
+import { packageRemitoWorkbook, REMITO_CONTENT_TYPE } from "@/lib/order-excel-package";
 
 export type OrderExcelRequestItem = {
   kind?: "product" | "pack";
@@ -70,6 +71,7 @@ type ResolvedOrderLine = {
 };
 
 const ORDER_TEMPLATE_KEY = "pedido_excel";
+const ORDER_TIME_ZONE = "America/Argentina/Buenos_Aires";
 
 const COLUMN_ALIASES: Record<string, string[]> = {
   sku: ["sku", "codigo", "código"],
@@ -100,11 +102,32 @@ function normalizeHeader(value: unknown) {
     .trim();
 }
 
-function formatCurrencyValue(value: number) {
-  return new Intl.NumberFormat("es-AR", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(Math.round(value));
+function formatRemitoDate(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const parts = new Intl.DateTimeFormat("es-AR", {
+    timeZone: ORDER_TIME_ZONE,
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  }).formatToParts(date);
+  const getPart = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+
+  return [getPart("day"), getPart("month"), getPart("year")].filter(Boolean).join("-");
+}
+
+function getRemitoFileName(generatedAt: string) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: ORDER_TIME_ZONE,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date(generatedAt));
+  const part = (type: string) => parts.find((entry) => entry.type === type)?.value ?? "";
+  return `Remito_${part("year")}-${part("month")}-${part("day")}_${part("hour")}-${part("minute")}-${part("second")}.xlsm`;
 }
 
 function resolveAudience(viewer: OrderExcelViewer): OrderTemplateAudience {
@@ -133,6 +156,31 @@ function cloneStyle<T>(value: T): T {
   }
 
   return value;
+}
+
+function getExcelColumnLetter(columnNumber: number) {
+  let column = "";
+  let remaining = Math.max(1, Math.floor(columnNumber));
+
+  while (remaining > 0) {
+    const modulo = (remaining - 1) % 26;
+    column = String.fromCharCode(65 + modulo) + column;
+    remaining = Math.floor((remaining - modulo) / 26);
+  }
+
+  return column;
+}
+
+function getCellAddress(rowNumber: number, columnNumber: number) {
+  return `${getExcelColumnLetter(columnNumber)}${rowNumber}`;
+}
+
+function getRangeAddress(startRow: number, startColumn: number, endRow: number, endColumn: number) {
+  return `${getCellAddress(startRow, startColumn)}:${getCellAddress(endRow, endColumn)}`;
+}
+
+function setWorkbookRecalculation(workbook: ExcelJS.Workbook) {
+  workbook.calcProperties.fullCalcOnLoad = true;
 }
 
 function copyRowTemplate(sourceRow: ExcelJS.Row, targetRow: ExcelJS.Row) {
@@ -480,111 +528,10 @@ function buildFallbackWorkbook(lines: ResolvedOrderLine[], viewer: OrderExcelVie
   workbook.created = new Date(generatedAt);
   workbook.modified = new Date(generatedAt);
   workbook.properties.date1904 = false;
+  setWorkbookRecalculation(workbook);
 
-  const palette = {
-    dark: "4D2E1A",
-    primary: "A86D45",
-    primarySoft: "D9B68D",
-    cream: "FBF6EE",
-    sand: "F5E9D8",
-    border: "E4D2BA",
-    muted: "7A6652",
-  };
-
-  const baseColumns = [
-    { header: "Detalle", key: "detail", width: 56 },
-    { header: "Cant", key: "quantity", width: 12 },
-    { header: "Precio", key: "unitPrice", width: 18 },
-    { header: "Total", key: "total", width: 18 },
-  ] as const;
-
-  const summary = [
-    ["Pedido exportado", "PintoFruta"],
-    ["Tipo de precio", viewer.authenticated && viewer.canSeePrices ? "Logueado / miembro" : "Público / invitado"],
-    ["Fecha", new Date(generatedAt).toLocaleString("es-AR")],
-    ["Cantidad de líneas", String(lines.length)],
-    ["Total", formatCurrencyValue(lines.reduce((sum, line) => sum + line.subtotal, 0))],
-  ];
-
-  for (const [sheetName, subtitle] of [["REMITO", "Registro del pedido"]] as const) {
-    const sheet = workbook.addWorksheet(sheetName, {
-      views: [{ state: "frozen", ySplit: 6 }],
-      pageSetup: { orientation: "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
-    });
-
-    sheet.columns = baseColumns as unknown as ExcelJS.Column[];
-    sheet.properties.defaultRowHeight = 22;
-    sheet.getRow(1).height = 28;
-
-    sheet.mergeCells("A1:D1");
-    sheet.getCell("A1").value = `PintoFruta - ${sheetName}`;
-    sheet.getCell("A1").font = { bold: true, size: 18, color: { argb: "FFFFFFFF" } };
-    sheet.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: palette.dark } };
-    sheet.getCell("A1").alignment = { vertical: "middle", horizontal: "center" };
-    sheet.getCell("A1").border = {
-      top: { style: "thin", color: { argb: palette.dark } },
-      left: { style: "thin", color: { argb: palette.dark } },
-      bottom: { style: "thin", color: { argb: palette.dark } },
-      right: { style: "thin", color: { argb: palette.dark } },
-    };
-
-    sheet.mergeCells("A2:D2");
-    sheet.getCell("A2").value = subtitle;
-    sheet.getCell("A2").font = { italic: true, size: 11, color: { argb: palette.muted } };
-    sheet.getCell("A2").alignment = { vertical: "middle", horizontal: "left" };
-
-    for (let rowIndex = 0; rowIndex < summary.length; rowIndex += 1) {
-      const [label, value] = summary[rowIndex];
-      const row = sheet.getRow(3 + rowIndex);
-      row.getCell(1).value = label;
-      row.getCell(2).value = value;
-      row.getCell(1).font = { bold: true, color: { argb: palette.dark } };
-      row.getCell(2).font = { color: { argb: palette.dark } };
-      row.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: palette.cream } };
-      row.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: palette.cream } };
-    }
-
-    const headerRow = sheet.getRow(8);
-    baseColumns.forEach((column, index) => {
-      const cell = headerRow.getCell(index + 1);
-      cell.value = column.header;
-      cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: palette.primary } };
-      cell.alignment = { horizontal: "center", vertical: "middle" };
-      cell.border = {
-        top: { style: "thin", color: { argb: palette.border } },
-        left: { style: "thin", color: { argb: palette.border } },
-        bottom: { style: "thin", color: { argb: palette.border } },
-        right: { style: "thin", color: { argb: palette.border } },
-      };
-    });
-
-    lines.forEach((line, index) => {
-      const row = sheet.getRow(9 + index);
-      row.values = [line.name, line.quantity, line.unitPrice, line.subtotal];
-      row.eachCell((cell, columnNumber) => {
-        cell.border = {
-          top: { style: "thin", color: { argb: palette.border } },
-          left: { style: "thin", color: { argb: palette.border } },
-          bottom: { style: "thin", color: { argb: palette.border } },
-          right: { style: "thin", color: { argb: palette.border } },
-        };
-        cell.alignment = { vertical: "middle", horizontal: columnNumber > 1 ? "right" : "left" };
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: index % 2 === 0 ? "FFFCF8F2" : "FFF8F1E7" } };
-      });
-      row.getCell(2).numFmt = '#,##0';
-      row.getCell(3).numFmt = '#,##0';
-      row.getCell(4).numFmt = '#,##0';
-          });
-
-    const totalRow = sheet.getRow(9 + lines.length + 1);
-    totalRow.getCell(1).value = "TOTAL";
-    totalRow.getCell(1).font = { bold: true, color: { argb: palette.dark } };
-    totalRow.getCell(4).value = lines.reduce((sum, line) => sum + line.subtotal, 0);
-    totalRow.getCell(4).font = { bold: true, color: { argb: palette.dark } };
-    totalRow.getCell(4).numFmt = '#,##0';
-  }
-
+  const remitoSheet = workbook.addWorksheet("REMITO");
+  writeRegisterSheet(remitoSheet, lines, viewer, generatedAt);
   return workbook;
 }
 
@@ -868,13 +815,188 @@ function markSelectedRows(
   return paintedRows > 0;
 }
 
+const remitoPalette = {
+  lightBlue: "FFDDEBF7",
+  paleBlue: "FFEAF5FB",
+  border: "FF1F1F1F",
+  text: "FF000000",
+  white: "FFFFFFFF",
+  muted: "FF666666",
+  danger: "FFC00000",
+};
+
+const REMITO_ACTION_HEADER = "Quitar";
+const REMITO_ACTION_VALUE = "X";
+
+function styleRemitoCell(cell: ExcelJS.Cell, options: { bold?: boolean; fill?: string; align?: "left" | "center" | "right" } = {}) {
+  cell.font = { ...(cell.font ?? {}), bold: options.bold ?? false, color: { argb: remitoPalette.text } };
+  cell.alignment = { vertical: "middle", horizontal: options.align ?? "left", wrapText: options.align === "left" };
+  cell.border = {
+    top: { style: "thin", color: { argb: remitoPalette.border } },
+    left: { style: "thin", color: { argb: remitoPalette.border } },
+    bottom: { style: "thin", color: { argb: remitoPalette.border } },
+    right: { style: "thin", color: { argb: remitoPalette.border } },
+  };
+
+  if (options.fill) {
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: options.fill } };
+  }
+}
+
+function styleRemitoRow(sheet: ExcelJS.Worksheet, rowNumber: number, firstColumn: number, lastColumn: number, options: { bold?: boolean; fill?: string } = {}) {
+  const row = sheet.getRow(rowNumber);
+
+  for (let columnNumber = firstColumn; columnNumber <= lastColumn; columnNumber += 1) {
+    const align = columnNumber === firstColumn ? "left" : "right";
+    styleRemitoCell(row.getCell(columnNumber), { ...options, align });
+  }
+}
+
+function centerRemitoRow(sheet: ExcelJS.Worksheet, rowNumber: number, firstColumn: number, lastColumn: number) {
+  const row = sheet.getRow(rowNumber);
+
+  for (let columnNumber = firstColumn; columnNumber <= lastColumn; columnNumber += 1) {
+    row.getCell(columnNumber).alignment = { vertical: "middle", horizontal: "center" };
+  }
+}
+
+function getRemitoActionColumn(sheet: ExcelJS.Worksheet, headerRow: number, preferredColumn: number) {
+  const header = sheet.getRow(headerRow);
+  const scanUntil = Math.max(sheet.columnCount || 0, preferredColumn);
+
+  for (let columnNumber = 1; columnNumber <= scanUntil; columnNumber += 1) {
+    const normalized = normalizeHeader(header.getCell(columnNumber).value);
+    if (normalized === "quitar" || normalized === "eliminar") {
+      return columnNumber;
+    }
+  }
+
+  return preferredColumn;
+}
+
+function styleRemitoActionCell(cell: ExcelJS.Cell, isHeader = false) {
+  cell.font = { bold: true, color: { argb: isHeader ? remitoPalette.text : remitoPalette.danger } };
+  cell.alignment = { vertical: "middle", horizontal: "center" };
+  cell.border = {
+    top: { style: "thin", color: { argb: remitoPalette.border } },
+    left: { style: "thin", color: { argb: remitoPalette.border } },
+    bottom: { style: "thin", color: { argb: remitoPalette.border } },
+    right: { style: "thin", color: { argb: remitoPalette.border } },
+  };
+  cell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: isHeader ? remitoPalette.lightBlue : remitoPalette.white },
+  };
+}
+
+function setRemitoDeleteAction(cell: ExcelJS.Cell) {
+  cell.value = {
+    text: REMITO_ACTION_VALUE,
+    hyperlink: `#'REMITO'!A${cell.row}`,
+    tooltip: "Eliminar esta fila del remito",
+  };
+}
+
+function setRemitoMacroRanges(sheet: ExcelJS.Worksheet, headerRow: number, actionColumn: number, totalRow: number, totalColumn: number) {
+  sheet.workbook.definedNames.add(`'REMITO'!$${getExcelColumnLetter(actionColumn)}$${headerRow}`, "RemitoQuitar");
+  sheet.workbook.definedNames.add(`'REMITO'!$${getExcelColumnLetter(totalColumn)}$${totalRow}`, "RemitoTotal");
+}
+
+function writeRemitoTitle(sheet: ExcelJS.Worksheet, rowNumber: number, generatedAt: string, lastColumn: number) {
+  const titleCell = sheet.getRow(rowNumber).getCell(1);
+  titleCell.value = `REMITO        ${formatRemitoDate(generatedAt)}`;
+  titleCell.font = { bold: true, size: 24, color: { argb: remitoPalette.text } };
+  titleCell.alignment = { horizontal: "center", vertical: "middle" };
+
+  for (let columnNumber = 1; columnNumber <= lastColumn; columnNumber += 1) {
+    styleRemitoCell(sheet.getRow(rowNumber).getCell(columnNumber), { bold: true, align: "center" });
+  }
+}
+
+function setRemitoAutoFilter(sheet: ExcelJS.Worksheet, headerRow: number, firstColumn: number, lastColumn: number, lastDataRow: number) {
+  sheet.autoFilter = getRangeAddress(headerRow, firstColumn, Math.max(headerRow, lastDataRow), lastColumn);
+}
+
+function getLineUnitPrice(line: ResolvedOrderLine, viewer: OrderExcelViewer) {
+  return viewer.authenticated && viewer.canSeePrices ? line.memberPrice || line.unitPrice : line.publicPrice || line.unitPrice;
+}
+
+function getLineSubtotalFormula(rowNumber: number, quantityColumn: number, priceColumn: number) {
+  return `${getCellAddress(rowNumber, quantityColumn)}*${getCellAddress(rowNumber, priceColumn)}`;
+}
+
+function getSubtotalFormula(headerRow: number, lastDataRow: number, totalColumn: number) {
+  const column = getExcelColumnLetter(totalColumn);
+  // The text header keeps the range valid even after every product row is deleted.
+  return `SUBTOTAL(109,${column}$${headerRow}:${column}${Math.max(headerRow, lastDataRow)})`;
+}
+
+function getRemitoTextHeight(text: string, width: number, fontSize: number) {
+  const charactersPerLine = Math.max(1, Math.floor(width * (11 / fontSize) * 0.8));
+  const lineCount = text.split(/\r?\n/).reduce((count, line) => count + Math.max(1, Math.ceil(line.length / charactersPerLine)), 0);
+  return Math.min(409, Math.ceil(lineCount * fontSize * 1.35 + 7));
+}
+
+function sizeRemitoSheet(sheet: ExcelJS.Worksheet, layout: {
+  headerRow: number; totalRow: number; detailColumn: number; quantityColumn: number;
+  priceColumn: number; totalColumn: number; actionColumn: number;
+}) {
+  const { headerRow, totalRow, detailColumn, quantityColumn, priceColumn, totalColumn, actionColumn } = layout;
+  const numberFormat = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 });
+  sheet.getColumn(detailColumn).width = 94;
+  sheet.getColumn(actionColumn).width = 12;
+
+  for (const [columnNumber, minimumWidth] of [[quantityColumn, 12], [priceColumn, 18], [totalColumn, 20]]) {
+    let width = Math.max(minimumWidth, sheet.getRow(headerRow).getCell(columnNumber).text.length + 5);
+    for (let rowNumber = headerRow + 1; rowNumber <= totalRow; rowNumber += 1) {
+      const cell = sheet.getRow(rowNumber).getCell(columnNumber);
+      const value = cell.type === ExcelJS.ValueType.Formula ? cell.result : cell.value;
+      if (typeof value === "number") {
+        width = Math.max(width, Math.ceil(numberFormat.format(value).length * (12 / 11)) + 5);
+      }
+    }
+    sheet.getColumn(columnNumber).width = width;
+  }
+
+  for (let rowNumber = headerRow; rowNumber <= totalRow; rowNumber += 1) {
+    const row = sheet.getRow(rowNumber);
+    for (const columnNumber of [detailColumn, quantityColumn, priceColumn, totalColumn, actionColumn]) {
+      const cell = row.getCell(columnNumber);
+      cell.font = { ...cell.font, name: "Calibri", size: 12 };
+    }
+    const detail = row.getCell(detailColumn);
+    detail.alignment = { ...detail.alignment, wrapText: true, shrinkToFit: false };
+    row.height = Math.max(rowNumber === totalRow ? 30 : 24, getRemitoTextHeight(detail.text, 94, 12));
+  }
+  sheet.getRow(headerRow).height = 28;
+
+  // Merged title/customer cells need an explicit height because Excel AutoFit skips them.
+  const lastColumn = sheet.columnCount;
+  for (let rowNumber = 1; rowNumber < headerRow; rowNumber += 1) {
+    const row = sheet.getRow(rowNumber);
+    let height = row.height ?? 22;
+    row.eachCell((cell, columnNumber) => {
+      if (cell.master.address !== cell.address || !cell.text) return;
+      let width = sheet.getColumn(columnNumber).width ?? 12;
+      for (let nextColumn = columnNumber + 1; nextColumn <= lastColumn; nextColumn += 1) {
+        if (row.getCell(nextColumn).master.address !== cell.address) break;
+        width += sheet.getColumn(nextColumn).width ?? 12;
+      }
+      cell.alignment = { ...cell.alignment, wrapText: true };
+      height = Math.max(height, getRemitoTextHeight(cell.text, width, cell.font?.size ?? 12));
+    });
+    row.height = Math.min(409, height);
+  }
+}
+
 function writeRegisterSheet(sheet: ExcelJS.Worksheet, lines: ResolvedOrderLine[], viewer: OrderExcelViewer, generatedAt: string) {
   const palette = {
     dark: "4D2E1A",
     primary: "A86D45",
     cream: "FBF6EE",
     border: "E4D2BA",
-    muted: "7A6652",
+    muted: "FF7A6652",
   };
 
   const table = findRemitoTable(sheet);
@@ -883,14 +1005,34 @@ function writeRegisterSheet(sheet: ExcelJS.Worksheet, lines: ResolvedOrderLine[]
     const firstDataRow = headerRow + 1;
     const currentLastDataRow = totalRow ? totalRow - 1 : Math.max(sheet.rowCount, firstDataRow);
     const currentCapacity = Math.max(0, currentLastDataRow - firstDataRow + 1);
+    const firstColumn = Math.min(detailColumn, quantityColumn, priceColumn, totalColumn);
+    const lastColumn = Math.max(detailColumn, quantityColumn, priceColumn, totalColumn);
+    const actionColumn = getRemitoActionColumn(sheet, headerRow, lastColumn + 1);
+    const tableLastColumn = Math.max(lastColumn, actionColumn);
+    writeRemitoTitle(sheet, 1, generatedAt, tableLastColumn);
 
     if (totalRow && lines.length > currentCapacity) {
       const extraRows = lines.length - currentCapacity;
       sheet.insertRows(totalRow, Array.from({ length: extraRows }, () => []), "i");
+    } else if (totalRow && lines.length < currentCapacity) {
+      sheet.spliceRows(firstDataRow + lines.length, currentCapacity - lines.length);
     }
 
     const detailTemplateRow = sheet.getRow(firstDataRow);
     const lastLineRow = firstDataRow + lines.length - 1;
+    const summaryRowNumber = firstDataRow + lines.length;
+    const summaryResult = lines.reduce((sum, line) => {
+      const quantity = Math.max(1, Number(line.quantity) || 1);
+      return sum + quantity * getLineUnitPrice(line, viewer);
+    }, 0);
+
+    sheet.getColumn(actionColumn).width = Math.max(Number(sheet.getColumn(actionColumn).width ?? 0), 10);
+    sheet.getRow(headerRow).getCell(actionColumn).value = REMITO_ACTION_HEADER;
+    styleRemitoRow(sheet, headerRow, firstColumn, tableLastColumn, { bold: true, fill: remitoPalette.lightBlue });
+    styleRemitoActionCell(sheet.getRow(headerRow).getCell(actionColumn), true);
+    centerRemitoRow(sheet, headerRow, firstColumn, tableLastColumn);
+    sheet.properties.outlineLevelRow = 0;
+    sheet.properties.outlineProperties = { summaryBelow: false, summaryRight: false };
 
     lines.forEach((line, index) => {
       const rowNumber = firstDataRow + index;
@@ -901,44 +1043,46 @@ function writeRegisterSheet(sheet: ExcelJS.Worksheet, lines: ResolvedOrderLine[]
       }
 
       const quantity = Math.max(1, Number(line.quantity) || 1);
-      const unitPrice = viewer.authenticated && viewer.canSeePrices ? line.memberPrice || line.unitPrice : line.publicPrice || line.unitPrice;
+      const unitPrice = getLineUnitPrice(line, viewer);
       const total = quantity * unitPrice;
 
       row.getCell(detailColumn).value = line.name;
       row.getCell(quantityColumn).value = quantity;
       row.getCell(priceColumn).value = unitPrice;
-      row.getCell(totalColumn).value = total;
+      row.getCell(totalColumn).value = {
+        formula: getLineSubtotalFormula(rowNumber, quantityColumn, priceColumn),
+        result: total,
+      };
 
       row.getCell(quantityColumn).numFmt = "#,##0";
       row.getCell(priceColumn).numFmt = "#,##0";
       row.getCell(totalColumn).numFmt = "#,##0";
+      setRemitoDeleteAction(row.getCell(actionColumn));
 
-      row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
-        cell.border = {
-          top: { style: "thin", color: { argb: palette.border } },
-          left: { style: "thin", color: { argb: palette.border } },
-          bottom: { style: "thin", color: { argb: palette.border } },
-          right: { style: "thin", color: { argb: palette.border } },
-        };
-        cell.alignment = {
-          vertical: "middle",
-          horizontal: columnNumber === detailColumn ? "left" : "right",
-        };
-      });
+      styleRemitoRow(sheet, rowNumber, firstColumn, tableLastColumn);
+      row.getCell(detailColumn).font = { ...(row.getCell(detailColumn).font ?? {}), bold: true };
+      styleRemitoActionCell(row.getCell(actionColumn));
+      row.outlineLevel = 0;
+      row.hidden = false;
     });
 
-    if (totalRow) {
-      const summaryRow = sheet.getRow(totalRow + Math.max(0, lines.length - currentCapacity));
-      summaryRow.getCell(detailColumn).value = "TOTAL";
-      summaryRow.getCell(totalColumn).value = lines.reduce((sum, line) => {
-        const quantity = Math.max(1, Number(line.quantity) || 1);
-        const unitPrice = viewer.authenticated && viewer.canSeePrices ? line.memberPrice || line.unitPrice : line.publicPrice || line.unitPrice;
-        return sum + quantity * unitPrice;
-      }, 0);
-      summaryRow.getCell(totalColumn).numFmt = "#,##0";
-      summaryRow.getCell(detailColumn).font = { bold: true, color: { argb: palette.dark } };
-      summaryRow.getCell(totalColumn).font = { bold: true, color: { argb: palette.dark } };
+    const summaryRow = sheet.getRow(summaryRowNumber);
+    for (let column = firstColumn; column <= tableLastColumn; column += 1) {
+      summaryRow.getCell(column).value = null;
     }
+    summaryRow.outlineLevel = 0;
+    summaryRow.hidden = false;
+    summaryRow.getCell(detailColumn).value = "TOTAL";
+    summaryRow.getCell(actionColumn).value = "";
+    summaryRow.getCell(totalColumn).value = {
+      formula: getSubtotalFormula(headerRow, lastLineRow, totalColumn),
+      result: summaryResult,
+    };
+    summaryRow.getCell(totalColumn).numFmt = "#,##0";
+    styleRemitoRow(sheet, summaryRowNumber, firstColumn, tableLastColumn, { bold: true, fill: remitoPalette.lightBlue });
+    setRemitoAutoFilter(sheet, headerRow, firstColumn, tableLastColumn, lastLineRow);
+    setRemitoMacroRanges(sheet, headerRow, actionColumn, summaryRowNumber, totalColumn);
+    sizeRemitoSheet(sheet, { headerRow, totalRow: summaryRowNumber, detailColumn, quantityColumn, priceColumn, totalColumn, actionColumn });
 
     return;
   }
@@ -946,78 +1090,77 @@ function writeRegisterSheet(sheet: ExcelJS.Worksheet, lines: ResolvedOrderLine[]
   const startRow = Math.max(1, sheet.actualRowCount + 1);
   if (startRow === 1) {
     sheet.columns = [
-      { header: "Detalle", key: "detail", width: 34 },
-      { header: "Cantidad", key: "quantity", width: 12 },
-      { header: "Precio", key: "price", width: 18 },
-      { header: "Total", key: "total", width: 18 },
+      { header: "Detalle", key: "detail", width: 78 },
+      { header: "Cant", key: "quantity", width: 10 },
+      { header: "Precio", key: "price", width: 14 },
+      { header: "Total", key: "total", width: 14 },
+      { header: REMITO_ACTION_HEADER, key: "remove", width: 10 },
     ];
+    sheet.views = [{ state: "frozen", ySplit: startRow + 3 }];
+    sheet.pageSetup = { orientation: "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+    sheet.properties.defaultRowHeight = 22;
+    sheet.properties.outlineLevelRow = 0;
+    sheet.properties.outlineProperties = { summaryBelow: false, summaryRight: false };
   }
 
-  sheet.mergeCells(startRow, 1, startRow, 4);
-  sheet.getCell(startRow, 1).value = "Remito";
-  sheet.getCell(startRow, 1).font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
-  sheet.getCell(startRow, 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: palette.dark } };
-  sheet.getCell(startRow, 1).alignment = { horizontal: "center", vertical: "middle" };
+  sheet.mergeCells(startRow, 1, startRow, 5);
+  writeRemitoTitle(sheet, startRow, generatedAt, 5);
 
-  sheet.mergeCells(startRow + 1, 1, startRow + 1, 4);
-  sheet.getCell(startRow + 1, 1).value = `Generado el ${new Date(generatedAt).toLocaleString("es-AR")} - ${
+  sheet.mergeCells(startRow + 1, 1, startRow + 1, 5);
+  sheet.getCell(startRow + 1, 1).value = `Generado el ${new Date(generatedAt).toLocaleString("es-AR", { timeZone: ORDER_TIME_ZONE })} - ${
     viewer.authenticated && viewer.canSeePrices ? "Precios de miembro" : "Precios públicos"
   }`;
   sheet.getCell(startRow + 1, 1).font = { italic: true, color: { argb: palette.muted } };
 
   const tableHeaderRow = sheet.getRow(startRow + 3);
-  const headers = ["Detalle", "Cant", "Precio", "Total"];
+  const headers = ["Detalle", "Cant", "Precio", "Total", REMITO_ACTION_HEADER];
   headers.forEach((header, index) => {
     const cell = tableHeaderRow.getCell(index + 1);
     cell.value = header;
-    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: palette.primary } };
-    cell.alignment = { horizontal: "center", vertical: "middle" };
-    cell.border = {
-      top: { style: "thin", color: { argb: palette.border } },
-      left: { style: "thin", color: { argb: palette.border } },
-      bottom: { style: "thin", color: { argb: palette.border } },
-      right: { style: "thin", color: { argb: palette.border } },
-    };
   });
+  styleRemitoRow(sheet, startRow + 3, 1, 5, { bold: true, fill: remitoPalette.lightBlue });
+  styleRemitoActionCell(tableHeaderRow.getCell(5), true);
+  centerRemitoRow(sheet, startRow + 3, 1, 5);
 
   lines.forEach((line, index) => {
-    const row = sheet.getRow(startRow + 4 + index);
-    const unitPrice = viewer.authenticated && viewer.canSeePrices ? line.memberPrice || line.unitPrice : line.publicPrice || line.unitPrice;
-    const total = unitPrice * Math.max(1, Number(line.quantity) || 1);
+    const rowNumber = startRow + 4 + index;
+    const row = sheet.getRow(rowNumber);
+    const quantity = Math.max(1, Number(line.quantity) || 1);
+    const unitPrice = getLineUnitPrice(line, viewer);
+    const total = unitPrice * quantity;
 
-    row.values = [
-      undefined,
-      line.name,
-      line.quantity,
-      unitPrice,
-      total,
-    ];
-    row.eachCell((cell, columnNumber) => {
-      cell.border = {
-        top: { style: "thin", color: { argb: palette.border } },
-        left: { style: "thin", color: { argb: palette.border } },
-        bottom: { style: "thin", color: { argb: palette.border } },
-        right: { style: "thin", color: { argb: palette.border } },
-      };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: index % 2 === 0 ? "FFFCF8F2" : "FFF8F1E7" } };
-      cell.alignment = { vertical: "middle", horizontal: columnNumber === 2 ? "left" : "right" };
-    });
+    row.getCell(1).value = line.name;
+    row.getCell(2).value = quantity;
+    row.getCell(3).value = unitPrice;
+    row.getCell(4).value = {
+      formula: getLineSubtotalFormula(rowNumber, 2, 3),
+      result: total,
+    };
+    styleRemitoRow(sheet, rowNumber, 1, 5);
+    row.getCell(1).font = { ...(row.getCell(1).font ?? {}), bold: true };
     row.getCell(2).numFmt = "#,##0";
     row.getCell(3).numFmt = "#,##0";
     row.getCell(4).numFmt = "#,##0";
+    setRemitoDeleteAction(row.getCell(5));
+    styleRemitoActionCell(row.getCell(5));
   });
 
-  const totalRow = sheet.getRow(startRow + 5 + lines.length);
-  totalRow.getCell(3).value = "Total";
-  totalRow.getCell(3).font = { bold: true, color: { argb: palette.dark } };
-  totalRow.getCell(4).value = lines.reduce((sum, line) => {
-    const quantity = Math.max(1, Number(line.quantity) || 1);
-    const unitPrice = viewer.authenticated && viewer.canSeePrices ? line.memberPrice || line.unitPrice : line.publicPrice || line.unitPrice;
-    return sum + quantity * unitPrice;
-  }, 0);
-  totalRow.getCell(4).font = { bold: true, color: { argb: palette.dark } };
+  const lastDataRow = startRow + 3 + lines.length;
+  const totalRow = sheet.getRow(startRow + 4 + lines.length);
+  totalRow.getCell(1).value = "TOTAL";
+  totalRow.getCell(5).value = "";
+  totalRow.getCell(4).value = {
+    formula: getSubtotalFormula(startRow + 3, lastDataRow, 4),
+    result: lines.reduce((sum, line) => {
+      const quantity = Math.max(1, Number(line.quantity) || 1);
+      return sum + quantity * getLineUnitPrice(line, viewer);
+    }, 0),
+  };
   totalRow.getCell(4).numFmt = "#,##0";
+  styleRemitoRow(sheet, startRow + 4 + lines.length, 1, 5, { bold: true, fill: remitoPalette.lightBlue });
+  setRemitoAutoFilter(sheet, startRow + 3, 1, 5, lastDataRow);
+  setRemitoMacroRanges(sheet, startRow + 3, 5, totalRow.number, 4);
+  sizeRemitoSheet(sheet, { headerRow: startRow + 3, totalRow: totalRow.number, detailColumn: 1, quantityColumn: 2, priceColumn: 3, totalColumn: 4, actionColumn: 5 });
 }
 
 function populateWorkbook(
@@ -1115,6 +1258,7 @@ export async function buildOrderExcelFile({
       console.info("[pedido/excel] build:workbook-load:start");
       traceExcel("build:workbook-load:start");
       await workbook.xlsx.load(toExcelJsBuffer(templateFile.buffer));
+      setWorkbookRecalculation(workbook);
       console.info("[pedido/excel] build:workbook-load:done");
       traceExcel("build:workbook-load:done");
       console.info("[pedido/excel] build:populate:start", { templateId: template.id });
@@ -1124,12 +1268,13 @@ export async function buildOrderExcelFile({
       traceExcel("build:populate:done");
       console.info("[pedido/excel] build:write-buffer:start");
       traceExcel("build:write-buffer:start");
-      const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+      const buffer = await packageRemitoWorkbook(Buffer.from(await workbook.xlsx.writeBuffer()));
       console.info("[pedido/excel] build:write-buffer:done", { size: buffer.length });
       traceExcel("build:write-buffer:done", { size: buffer.length });
       return {
         buffer,
-        fileName: templateFile.fileName || `pedido-pintofruta-${audience}.xlsx`,
+        fileName: getRemitoFileName(generatedAt),
+        contentType: REMITO_CONTENT_TYPE,
         audience,
         usedTemplate: true,
         lines,
@@ -1140,13 +1285,14 @@ export async function buildOrderExcelFile({
   console.info("[pedido/excel] build:fallback:start");
   traceExcel("build:fallback:start");
   const workbook = buildFallbackWorkbook(lines, viewer, generatedAt);
-  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  const buffer = await packageRemitoWorkbook(Buffer.from(await workbook.xlsx.writeBuffer()));
   console.info("[pedido/excel] build:fallback:done", { size: buffer.length });
   traceExcel("build:fallback:done", { size: buffer.length });
 
   return {
     buffer,
-    fileName: `pedido-pintofruta-${audience}.xlsx`,
+    fileName: getRemitoFileName(generatedAt),
+    contentType: REMITO_CONTENT_TYPE,
     audience,
     usedTemplate: false,
     lines,

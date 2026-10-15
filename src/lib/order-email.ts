@@ -4,6 +4,7 @@ import { getSiteContent } from "@/infrastructure/site-content.repository";
 
 type SendOrderEmailParams = {
   fileName: string;
+  contentType: string;
   buffer: Buffer;
   itemCount: number;
   viewerName?: string | null;
@@ -77,6 +78,10 @@ function buildOrderEmailText(params: SendOrderEmailParams) {
     `Items: ${params.itemCount}`,
     "",
     "Se adjunta detalle del pedido y remito.",
+    "",
+    "Abrir el archivo adjunto en Microsoft Excel para ajustar el remito.",
+    "El adjunto es un archivo .xlsm con una macro para eliminar productos. Se necesita Excel de escritorio y permitir las macros de este archivo para usar la X.",
+    "Hacer clic en la X de la columna Quitar elimina esa fila y recalcula el total. Los cambios de cantidad o precio y los filtros tambien actualizan el total.",
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");
@@ -122,6 +127,18 @@ function buildOrderEmailHtml(params: SendOrderEmailParams) {
             <div style="margin-top:20px;background:#fff8e9;border:1px solid #f0dfb6;border-radius:18px;padding:18px 22px;">
               <p style="margin:0;font-size:14px;line-height:1.6;color:#4d3b26;"><strong>Items:</strong> ${params.itemCount}</p>
               <p style="margin:8px 0 0 0;font-size:14px;line-height:1.6;color:#4d3b26;">Se adjunta detalle del pedido y remito.</p>
+            </div>
+
+            <div style="margin-top:20px;background:#ffffff;border:1px solid #eadfce;border-radius:18px;padding:18px 22px;">
+              <div style="margin:0 0 10px 0;font-size:12px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#8b6c45;">
+                Ajustar el remito en Microsoft Excel
+              </div>
+              <p style="margin:0;font-size:14px;line-height:1.6;color:#4d3b26;">
+                Abrir el adjunto <strong>.xlsm</strong> en <strong>Excel de escritorio</strong> y permitir las macros de este archivo para usar la X.
+              </p>
+              <p style="margin:8px 0 0 0;font-size:14px;line-height:1.6;color:#4d3b26;">
+                Hacer clic en la <strong>X</strong> de <strong>Quitar</strong> elimina esa fila y recalcula el total. Los cambios de cantidad o precio y los filtros tambien actualizan el total.
+              </p>
             </div>
 
             <p style="margin:22px 0 0 0;font-size:12px;line-height:1.6;color:#8d7b68;">
@@ -173,6 +190,7 @@ export async function sendOrderExcelByEmail(params: SendOrderEmailParams) {
       {
         filename: params.fileName,
         content: params.buffer,
+        contentType: params.contentType,
       },
       {
         filename: "logo-Pintofruta.png",

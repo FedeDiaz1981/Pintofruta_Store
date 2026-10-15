@@ -244,6 +244,7 @@ async function handleExcelExport(request: Request) {
   try {
     const mailResult = await sendOrderExcelByEmail({
       fileName: exportResult.fileName,
+      contentType: exportResult.contentType,
       buffer: exportResult.buffer,
       itemCount: exportResult.lines.length,
       viewerName: viewer?.name ?? null,
@@ -254,10 +255,10 @@ async function handleExcelExport(request: Request) {
 
     if (!mailResult.sent) {
       trace("email:skipped", mailResult);
-      return new NextResponse(exportResult.buffer, {
+      return new NextResponse(new Uint8Array(exportResult.buffer), {
         status: 200,
         headers: {
-          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Type": exportResult.contentType,
           "Content-Disposition": `attachment; filename="${exportResult.fileName}"`,
           "Cache-Control": "no-store",
           "X-Email-Sent": "false",
@@ -275,10 +276,10 @@ async function handleExcelExport(request: Request) {
       message: error instanceof Error ? error.message : String(error),
     });
 
-    return new NextResponse(exportResult.buffer, {
+    return new NextResponse(new Uint8Array(exportResult.buffer), {
       status: 200,
       headers: {
-        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Type": exportResult.contentType,
         "Content-Disposition": `attachment; filename="${exportResult.fileName}"`,
         "Cache-Control": "no-store",
         "X-Email-Sent": "false",

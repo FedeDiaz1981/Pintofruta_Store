@@ -13,6 +13,7 @@
     "bootstrap:admin": "node scripts/bootstrap-admin-user.mjs",
     "start": "next start",
     "lint": "eslint",
+    "test:order-excel": "node scripts/test-order-excel.cjs",
     "db:start": "node scripts/local-postgres.mjs start",
     "db:stop": "node scripts/local-postgres.mjs stop",
     "db:status": "node scripts/local-postgres.mjs status",
@@ -20,9 +21,11 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.8",
+    "@xmldom/xmldom": "^0.9.12",
     "daisyui": "^5.6.17",
     "embla-carousel-react": "^8.6.0",
     "exceljs": "^4.4.0",
+    "jszip": "^3.10.1",
     "lucide-react": "^1.24.0",
     "motion": "^12.42.2",
     "next": "16.2.10",
@@ -45,6 +48,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "hyperformula": "^3.5.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

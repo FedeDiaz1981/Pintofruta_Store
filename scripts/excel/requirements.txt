@@ -1,0 +1,5 @@
+ms-ovba==0.0.1
+ms-cfb==0.0.6
+ms-ovba-compression==1.0.1
+ms-ovba-crypto==2.0.1
+oletools==0.60.2
