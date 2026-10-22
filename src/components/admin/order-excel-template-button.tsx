@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { FileUp } from "lucide-react";
 import type { OrderTemplateAudience } from "@/infrastructure/order-template";
 
 type UploadResponse =
@@ -29,7 +30,7 @@ async function postTemplateUpload(formData: FormData) {
   return payload;
 }
 
-export function OrderExcelTemplateButton({ disabled = false }: { disabled?: boolean }) {
+export function OrderExcelTemplateButton({ disabled = false, className }: { disabled?: boolean; className?: string }) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -130,8 +131,9 @@ export function OrderExcelTemplateButton({ disabled = false }: { disabled?: bool
         type="button"
         onClick={openDialog}
         disabled={disabled}
-        className="inline-flex h-14 items-center justify-center rounded-full border border-[rgba(111,69,40,0.18)] bg-[linear-gradient(180deg,var(--pf-primary-soft),var(--pf-primary))] px-6 text-sm font-black text-white shadow-[0_14px_30px_rgba(168,109,69,0.22)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+        className={className ?? "inline-flex h-14 items-center justify-center rounded-full border border-[rgba(111,69,40,0.18)] bg-[linear-gradient(180deg,var(--pf-primary-soft),var(--pf-primary))] px-6 text-sm font-black text-white shadow-[0_14px_30px_rgba(168,109,69,0.22)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"}
       >
+        <FileUp size={18} aria-hidden="true" />
         Subir template Excel
       </button>
 

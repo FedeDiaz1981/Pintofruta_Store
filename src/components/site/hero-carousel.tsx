@@ -7,13 +7,22 @@ import useEmblaCarousel from "embla-carousel-react";
 import type { HeroSlide } from "@/domain/site-content";
 import { publicAsset } from "@/lib/catalog";
 import { Button, buttonVariants } from "@/components/ui/button";
+import styles from "./hero-carousel.module.css";
 
 function resolveHref(href: string) {
   return href.replace("galeria.html", "/galeria").replace("busqueda.html", "/busqueda");
 }
 
-function MobileHeroCarousel({ slides, visibleIndex }: { slides: HeroSlide[]; visibleIndex: number }) {
+function MobileHeroCarousel({ slides }: { slides: HeroSlide[] }) {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: slides.length > 1, align: "start" });
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    const updateSelection = () => setSelectedIndex(emblaApi.selectedScrollSnap());
+    emblaApi.on("select", updateSelection).on("reInit", updateSelection);
+    return () => { emblaApi.off("select", updateSelection).off("reInit", updateSelection); };
+  }, [emblaApi]);
 
   useEffect(() => {
     if (!emblaApi || slides.length <= 1) {
@@ -28,47 +37,35 @@ function MobileHeroCarousel({ slides, visibleIndex }: { slides: HeroSlide[]; vis
   }, [emblaApi, slides.length]);
 
   return (
-    <section className="w-full overflow-hidden bg-[var(--pf-surface)] md:hidden">
-      <div className="relative h-[min(25svh,260px)] w-full overflow-hidden">
+    <section className={`${styles.mobile} md:hidden`} aria-label="Carrusel principal">
+      <div className={styles.viewport}>
         <div ref={emblaRef} className="h-full overflow-hidden">
           <div className="flex h-full touch-pan-y">
             {slides.map((slide, index) => {
-              const active = index === visibleIndex;
+              const active = index === selectedIndex;
 
               return (
-                <div key={slide.id} className="flex h-full min-w-0 flex-[0_0_100%] px-3 py-3">
-                  <article
-                    className={`relative flex h-full w-full overflow-hidden rounded-[1.9rem] border border-[rgba(168,109,69,0.18)] bg-[var(--pf-surface)] shadow-[0_18px_40px_rgba(74,57,38,0.16)] transition-opacity duration-350 ease-out ${active ? "opacity-100" : "opacity-82"}`}
-                  >
-                    <picture className="absolute inset-0 block h-full w-full">
+                <div key={slide.id} className="h-full min-w-0 flex-[0_0_100%]" aria-hidden={!active} inert={!active}>
+                  <article className={styles.slide}>
+                    <div className={styles.copy}>
+                      <span className={styles.badge}>{slide.badge}</span>
+                      <h1 className={styles.title}>{slide.title}</h1>
+                      <p className={styles.subtitle}>{slide.subtitle}</p>
+                      <Link href={resolveHref(slide.link)} className={`${buttonVariants({ variant: "primary", size: "sm" })} ${styles.link}`}>
+                        Ir a la galer&iacute;a
+                      </Link>
+                    </div>
+                    <picture className={styles.picture}>
                       {slide.imageMobile ? <source media="(max-width: 767px)" srcSet={publicAsset(slide.imageMobile)} /> : null}
                       <img
                         src={publicAsset(slide.image)}
                         alt={slide.title}
-                        className="h-full w-full object-cover object-right"
+                        className={styles.image}
                         loading={index === 0 ? "eager" : "lazy"}
                         fetchPriority={index === 0 ? "high" : "auto"}
                       />
                     </picture>
 
-                    <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(248,242,232,0.08)_0%,rgba(248,242,232,0.24)_26%,rgba(248,242,232,0.64)_74%,rgba(248,242,232,0.92)_100%)]" />
-                    <div className="absolute inset-x-0 top-0 h-36 bg-[linear-gradient(180deg,rgba(248,242,232,0.54),transparent)]" />
-
-                    <div className="relative z-10 flex h-full w-full items-start">
-                      <div className="w-full px-4 pb-4 pt-8 text-[var(--pf-text)]">
-                        <span className="inline-flex rounded-full bg-[rgba(168,109,69,0.14)] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.3em] text-[var(--pf-primary-darker)] shadow-[0_8px_18px_rgba(74,57,38,0.08)]">
-                          {slide.badge}
-                        </span>
-                        <div className="mt-4">
-                          <Link
-                            href={resolveHref(slide.link)}
-                            className={`${buttonVariants({ variant: "primary", size: "lg" })} !text-white`}
-                          >
-                            Ir a la galería
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
                   </article>
                 </div>
               );
@@ -77,14 +74,15 @@ function MobileHeroCarousel({ slides, visibleIndex }: { slides: HeroSlide[]; vis
         </div>
 
         {slides.length > 1 ? (
-          <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 gap-2">
+          <div className={styles.pagination}>
             {slides.map((slide, index) => (
               <button
                 key={slide.id}
                 type="button"
                 onClick={() => emblaApi?.scrollTo(index)}
                 aria-label={`Ir al banner ${index + 1}`}
-                className={`h-2.5 rounded-full transition-all ${index === visibleIndex ? "w-8 bg-[var(--pf-primary-darker)]" : "w-2.5 bg-[rgba(74,57,38,0.28)]"}`}
+                aria-current={index === selectedIndex ? "true" : undefined}
+                className={styles.dot}
               />
             ))}
           </div>
@@ -162,13 +160,9 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
 
   const visibleIndex = activeIndex % orderedSlides.length;
 
-  const goToSlide = (nextIndex: number) => {
-    setActiveIndex((nextIndex + orderedSlides.length) % orderedSlides.length);
-  };
-
   return (
     <>
-      <MobileHeroCarousel slides={orderedSlides} visibleIndex={visibleIndex} />
+      <MobileHeroCarousel slides={orderedSlides} />
 
       <section ref={desktopHeroRef} className="relative hidden w-full bg-transparent md:block">
         <div className="pf-shell px-4 sm:px-6 lg:px-12">

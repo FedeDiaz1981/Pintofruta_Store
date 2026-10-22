@@ -3,10 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { ArrowUpRight, PackageX, Plus, Search, Trash2 } from "lucide-react";
+import styles from "./admin-workspace.module.css";
 import { deleteAdminRecord, deleteAdminRecords, saveAdminRecord, setProductSoldOut } from "@/app/admin/actions";
 import { ExcelImportButton } from "@/components/admin/excel-import-button";
-import { OrderExcelTemplateButton } from "@/components/admin/order-excel-template-button";
+import { PriceListDownloadButton } from "@/components/admin/price-list-download-button";
 import { ProductImageManager } from "@/components/admin/product-image-manager";
+import { ProductAvailabilityManager } from "@/components/admin/product-availability-manager";
+import { ProductDuplicatesManager } from "@/components/admin/product-duplicates-manager";
 import type {
   AdminCrudViewModel,
   AdminFieldDefinition,
@@ -16,6 +20,7 @@ import type {
 import type { ProductItem } from "@/domain/site-content";
 import { formatCurrency } from "@/lib/catalog";
 import { getTemplateRowMapKey } from "@/lib/order-template-row-map-key";
+import { countDuplicateProducts, findDuplicateProducts } from "@/lib/product-duplicates";
 
 type DraftRecord = Record<string, string | number | boolean | null>;
 
@@ -447,7 +452,7 @@ function isVisibleAdminRow(tableKey: AdminTableKey, row: Record<string, unknown>
   }
 
   if (tableKey === "products") {
-    return String(row.status ?? "").toLowerCase() !== "inactive";
+    return true;
   }
 
   if (typeof row.active === "boolean") {
@@ -643,6 +648,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   const [selectedTableKey, setSelectedTableKey] = useState<AdminTableKey>(initialTableKey);
   const [isQuickActionPending, startQuickActionTransition] = useTransition();
   const [query, setQuery] = useState("");
+  const [productVisibility, setProductVisibility] = useState<"all" | "active" | "inactive">("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [packSearch, setPackSearch] = useState("");
   const [fileNames, setFileNames] = useState<Record<string, string>>({});
@@ -650,10 +656,15 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   const [selectedRowId, setSelectedRowId] = useState("");
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [imageManagerOpen, setImageManagerOpen] = useState(false);
+  const [availabilityManagerOpen, setAvailabilityManagerOpen] = useState(false);
+  const [duplicatesManagerOpen, setDuplicatesManagerOpen] = useState(false);
+  const [deletedDuplicateIds, setDeletedDuplicateIds] = useState<number[]>([]);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [bulkDeleteState, setBulkDeleteState] = useState<BulkDeleteState | null>(null);
   const [soldOutOverrides, setSoldOutOverrides] = useState<Record<string, boolean>>({});
   const selectAllRef = useRef<HTMLInputElement | null>(null);
+  const duplicateGroups = useMemo(() => findDuplicateProducts(model.productAvailabilityRows.filter((product) => !deletedDuplicateIds.includes(product.id))), [model.productAvailabilityRows, deletedDuplicateIds]);
+  const duplicateCount = countDuplicateProducts(duplicateGroups);
 
   const selectedTable = useMemo(
     () => tables.find((table) => table.key === selectedTableKey) ?? tables[0],
@@ -684,8 +695,12 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
           Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(normalized)),
         );
 
-    return queryFilteredRows.filter((row) => isVisibleAdminRow(selectedTable.key, row));
-  }, [query, selectedRows, selectedTable.key]);
+    return queryFilteredRows.filter((row) => {
+      if (!isVisibleAdminRow(selectedTable.key, row)) return false;
+      if (selectedTable.key !== "products" || productVisibility === "all") return true;
+      return Boolean(row.active) === (productVisibility === "active");
+    });
+  }, [query, selectedRows, selectedTable.key, productVisibility]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / ADMIN_PAGE_SIZE));
   const visibleRows = useMemo(
@@ -717,7 +732,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [query, selectedTableKey]);
+  }, [query, selectedTableKey, productVisibility]);
 
   useEffect(() => {
     setCurrentPage((page) => Math.min(page, totalPages));
@@ -778,7 +793,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
     const rowLabel = String(row[table.rowLabelField] ?? rowId);
 
     if (!window.confirm(`Eliminar ${rowLabel}?`)) {
-      return;
+      return false;
     }
 
     const formData = new FormData();
@@ -789,6 +804,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
 
     setSelectedRowIds((current) => current.filter((id) => id !== rowId));
     setSelectedRowId((current) => (current === rowId ? "" : current));
+    return true;
   }
 
   function getProductSoldOut(row: Record<string, unknown>) {
@@ -931,7 +947,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
 
           <button
             type="button"
-            onClick={() => setImageManagerOpen(true)}
+            onClick={() => { setDuplicatesManagerOpen(false); setAvailabilityManagerOpen(false); setImageManagerOpen(true); }}
             className="mt-6 flex w-full items-center justify-between rounded-[18px] border border-white/10 bg-white/10 px-4 py-4 text-left text-[#f8f1e7]/90 transition hover:bg-white/15"
           >
             <span>
@@ -941,11 +957,33 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
             <span className="text-lg" aria-hidden="true">▧</span>
           </button>
 
+          <button
+            type="button"
+            onClick={() => { setDuplicatesManagerOpen(false); setImageManagerOpen(false); setAvailabilityManagerOpen(true); }}
+            className="mt-3 flex w-full items-center justify-between gap-3 rounded-[18px] border border-white/10 bg-white/10 px-4 py-4 text-left text-[#f8f1e7]/90 transition hover:bg-white/15"
+          >
+            <span className="block text-sm font-semibold">Productos agotados</span>
+            <PackageX size={20} className="shrink-0" aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setImageManagerOpen(false); setAvailabilityManagerOpen(false); setDuplicatesManagerOpen(true); }}
+            className={`${styles.duplicatesButton} mt-3 flex w-full items-center justify-between gap-3 rounded-[18px] border border-white/10 bg-white/10 px-4 py-4 text-left text-[#f8f1e7]/90 transition hover:bg-white/15`}
+            data-alert={duplicateCount > 0}
+            aria-label={`Productos duplicados: ${duplicateCount}`}
+            aria-haspopup="dialog"
+            title={`${duplicateCount} productos en ${duplicateGroups.length} grupos`}
+          >
+            <span className="block text-sm font-semibold">Productos duplicados</span>
+            <span className={styles.duplicateCount} aria-hidden="true">{duplicateCount}</span>
+          </button>
+
         </aside>
 
         <section className="min-w-0 flex-1 px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
-          <div className="min-w-0 rounded-[30px] border border-[var(--pf-border)] bg-[rgba(250,246,239,0.92)] p-5 shadow-[0_24px_60px_rgba(58,44,25,0.12)] backdrop-blur">
-            <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+          <div className={`${styles.frame} min-w-0 rounded-[30px] border border-[var(--pf-border)] bg-[rgba(250,246,239,0.92)] p-5 shadow-[0_24px_60px_rgba(58,44,25,0.12)] backdrop-blur`}>
+            <div className={styles.summaryHeader}>
               <div className="max-w-3xl">
                 <p className="text-[11px] font-black uppercase tracking-[0.36em] text-[var(--pf-secondary)]">Administracion</p>
                 <h1 className="mt-3 text-4xl font-black tracking-tight text-[var(--pf-text)] sm:text-5xl">
@@ -953,9 +991,9 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                 </h1>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 xl:w-[860px] xl:grid-cols-6 2xl:w-[960px]">
+              <div className={styles.overview}>
                 <div className="flex min-h-[94px] min-w-[132px] flex-col justify-between overflow-hidden rounded-[22px] border border-[var(--pf-border-soft)] bg-white p-4 shadow-[0_10px_25px_rgba(58,44,25,0.06)]">
-                  <p className="truncate text-[9px] font-black uppercase leading-none tracking-[0.22em] text-[var(--pf-muted)]">Productos</p>
+                  <p className="truncate text-[9px] font-black uppercase leading-none tracking-[0.22em] text-[var(--pf-muted)]">Productos activos</p>
                   <p className="text-2xl font-black leading-none text-[var(--pf-text)]">{overview.counts.products}</p>
                 </div>
                 <div className="flex min-h-[94px] min-w-[132px] flex-col justify-between overflow-hidden rounded-[22px] border border-[var(--pf-border-soft)] bg-white p-4 shadow-[0_10px_25px_rgba(58,44,25,0.06)]">
@@ -981,58 +1019,79 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
               </div>
             </div>
 
-            <div className="mt-6 flex flex-col gap-3 xl:flex-row xl:items-center">
-              <label className="flex h-14 flex-1 items-center rounded-full border border-[var(--pf-border-soft)] bg-white px-5 text-[var(--pf-muted)] shadow-[0_8px_22px_rgba(58,44,25,0.06)]">
-                <span className="text-sm">Buscar</span>
-                              <input
-                  type="text"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  className="ml-3 flex-1 bg-transparent text-sm text-[var(--pf-text)] outline-none placeholder:text-[var(--pf-muted)]"
-                  placeholder={selectedTable.key === "products" ? "Buscar por ID, nombre o marca" : "Buscar por SKU, nombre, email o estado"}
-                />
-              </label>
+            <div className={styles.toolbar}>
+              <div className={styles.actionsRow} role="group" aria-label="Acciones de la tabla">
+                <div className={styles.actionsGroup}>
+                  {selectedTable.key !== "site_content_meta" && selectedRowIds.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={handleBulkDelete}
+                      className={`${styles.action} ${styles.deleteAction}`}
+                    >
+                      <Trash2 aria-hidden="true" />
+                      Borrar seleccionados ({selectedRowIds.length})
+                    </button>
+                  ) : null}
 
-              <div className="flex flex-wrap gap-3">
-                {selectedTable.key !== "site_content_meta" && selectedRowIds.length > 0 ? (
+                  {selectedTable.key === "products" ? <ExcelImportButton className={styles.action} /> : null}
+
+                  {selectedTable.key === "products" ? <PriceListDownloadButton className={styles.action} /> : null}
+
                   <button
                     type="button"
-                    onClick={handleBulkDelete}
-                    className="inline-flex h-14 items-center justify-center rounded-full border border-[rgba(111,69,40,0.18)] bg-[linear-gradient(180deg,var(--pf-primary-soft),var(--pf-primary))] px-6 text-sm font-black text-white shadow-[0_14px_28px_rgba(111,69,40,0.18)] transition hover:brightness-105"
-                  >
-                    Borrar seleccionados ({selectedRowIds.length})
-                  </button>
-                ) : null}
-
-                {selectedTable.key === "products" ? <ExcelImportButton /> : null}
-
-                {selectedTable.key === "products" ? <OrderExcelTemplateButton /> : null}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (selectedTable.key === "site_content_meta") {
-                      const metaRow = (selectedRows[0] as Record<string, unknown> | undefined) ?? null;
-                      if (metaRow) {
-                        openEdit(selectedTable, metaRow);
-                        return;
+                    onClick={() => {
+                      if (selectedTable.key === "site_content_meta") {
+                        const metaRow = (selectedRows[0] as Record<string, unknown> | undefined) ?? null;
+                        if (metaRow) {
+                          openEdit(selectedTable, metaRow);
+                          return;
+                        }
                       }
-                    }
 
-                    openNew(selectedTable);
-                  }}
-                  className="inline-flex h-14 items-center justify-center rounded-full bg-[linear-gradient(180deg,var(--pf-primary-soft)_0%,var(--pf-primary)_100%)] px-6 text-sm font-black text-white shadow-[0_14px_30px_rgba(168,109,69,0.22)] transition hover:brightness-105"
+                      openNew(selectedTable);
+                    }}
+                    className={`${styles.action} ${styles.primaryAction}`}
+                  >
+                    <Plus aria-hidden="true" />
+                    {selectedTable.key === "site_content_meta" ? "Editar configuración" : getCreateLabel(selectedTable)}
+                  </button>
+                </div>
+
+                <Link
+                  href="/"
+                  className={styles.websiteLink}
                 >
-                  {selectedTable.key === "site_content_meta" ? "Editar configuración" : getCreateLabel(selectedTable)}
-                </button>
+                  Ir a la web
+                  <ArrowUpRight aria-hidden="true" />
+                </Link>
               </div>
 
-              <Link
-                href="/"
-                className="inline-flex h-14 items-center justify-center rounded-full border border-transparent px-5 text-sm font-semibold text-[var(--pf-text)] transition hover:bg-white/60"
-              >
-                Ir a la web
-              </Link>
+              <div className={styles.searchRow}>
+                <label className={styles.search}>
+                  <Search aria-hidden="true" />
+                  <span className="sr-only">Buscar registros</span>
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder={selectedTable.key === "products" ? "Buscar por ID, nombre o marca" : "Buscar por SKU, nombre, email o estado"}
+                  />
+                </label>
+                {selectedTable.key === "products" ? (
+                  <label className={styles.statusFilter}>
+                    <span>Estado</span>
+                    <select aria-label="Estado de productos" value={productVisibility} onChange={(event) => {
+                      setProductVisibility(event.target.value as typeof productVisibility);
+                      setSelectedRowIds([]);
+                      setSelectedRowId("");
+                    }}>
+                      <option value="all">Todos los estados</option>
+                      <option value="active">Activos</option>
+                      <option value="inactive">Inactivos</option>
+                    </select>
+                  </label>
+                ) : null}
+              </div>
             </div>
 
             <div className="mt-6">
@@ -1156,6 +1215,9 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                                       }
                                     >
                                       {formatCellValue(field, row[column.key])}
+                                      {selectedTable.key === "products" && column.key === "name" && row.active === false ? (
+                                        <span className={styles.inactiveBadge}>Inactivo</span>
+                                      ) : null}
                                     </div>
                                   </td>
                                 );
@@ -1243,6 +1305,35 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
           </div>
         </section>
       </div>
+
+      {duplicatesManagerOpen ? <ProductDuplicatesManager
+        groups={duplicateGroups}
+        onClose={() => setDuplicatesManagerOpen(false)}
+        onEdit={(product) => {
+          const table = tables.find((table) => table.key === "products");
+          const row = (table?.rows as Record<string, unknown>[] | undefined)?.find((row) => Number(row.id) === product.id);
+          if (!table || !row) return;
+          setDuplicatesManagerOpen(false);
+          openEdit(table, row);
+        }}
+        onDelete={async (product) => {
+          const table = tables.find((table) => table.key === "products");
+          const row = (table?.rows as Record<string, unknown>[] | undefined)?.find((row) => Number(row.id) === product.id);
+          if (!table || !row) throw new Error("El producto ya no esta disponible.");
+          const deleted = await handleQuickDelete(table, row);
+          if (deleted) {
+            setDeletedDuplicateIds((current) => [...current, product.id]);
+            router.refresh();
+          }
+          return deleted;
+        }}
+      /> : null}
+
+      {availabilityManagerOpen ? <ProductAvailabilityManager
+        products={model.productAvailabilityRows}
+        onProductChange={(product) => setSoldOutOverrides((current) => ({ ...current, [String(product.id)]: !!product.soldOut }))}
+        onClose={() => { setAvailabilityManagerOpen(false); router.refresh(); }}
+      /> : null}
 
       {imageManagerOpen ? (
         <div className="fixed inset-0 z-[13000] flex items-start justify-center overflow-y-auto bg-[#2d1f1480] px-4 py-6 backdrop-blur-sm lg:px-8 lg:py-10">

@@ -1,6 +1,7 @@
 import { DOMParser, XMLSerializer } from "@xmldom/xmldom";
 import JSZip from "jszip";
 import { REMITO_VBA_PROJECT_BASE64 } from "@/lib/remito-vba-project";
+import { normalizeWorkbookFonts } from "@/lib/excel-workbook-compat";
 
 export const REMITO_CONTENT_TYPE = "application/vnd.ms-excel.sheet.macroEnabled.12";
 
@@ -56,15 +57,7 @@ export async function packageRemitoWorkbook(buffer: Buffer) {
     writeXml(entry.name, sheet);
   }
 
-  // Excel 2007 requires font children in schema order; ExcelJS uses a different order.
-  const styles = await readXml("xl/styles.xml");
-  const fontOrder = ["b", "i", "strike", "condense", "extend", "outline", "shadow", "u", "vertAlign", "sz", "color", "name", "family", "charset", "scheme"];
-  for (const font of Array.from(styles.getElementsByTagNameNS(SPREADSHEET_NS, "font"))) {
-    const children = Array.from(font.childNodes).filter((child) => child.nodeType === 1);
-    children.sort((left, right) => fontOrder.indexOf(left.nodeName) - fontOrder.indexOf(right.nodeName));
-    for (const child of children) font.appendChild(child);
-  }
-  writeXml("xl/styles.xml", styles);
+  await normalizeWorkbookFonts(zip);
 
   const types = await readXml("[Content_Types].xml");
   const typesRoot = types.documentElement!;

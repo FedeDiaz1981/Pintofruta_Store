@@ -427,7 +427,7 @@ export async function getHomePageViewModel(): Promise<HomePageViewModel> {
 export async function getProductBySku(sku: string): Promise<ProductItem | null> {
   const normalizedSku = normalizeText(sku);
   const content = await getSiteContent();
-  const product = content.products.find((item) => normalizeText(item.sku) === normalizedSku);
+  const product = content.products.find((item) => item.status === "published" && normalizeText(item.sku) === normalizedSku);
 
   return product ?? null;
 }

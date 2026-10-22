@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { postgresPool } from "@/infrastructure/db/postgres";
+import { allocateProductIds, ensureProductIdSequence } from "@/infrastructure/db/product-ids";
 import { createSupabaseServiceClient, requireAdminViewer } from "@/infrastructure/auth/pintofruta-auth";
 import { siteContentSchemaSql } from "@/infrastructure/site-content/schema";
 import { normalizeText } from "@/lib/catalog";
@@ -201,6 +202,7 @@ async function ensureDatabase() {
 }
 
 async function nextNumericId(table: string) {
+  if (table === "products") return (await allocateProductIds(postgresPool!, 1))[0];
   const result = await postgresPool!.query<{ next_id: number }>(`select coalesce(max(id), 0) + 1 as next_id from ${table}`);
   return result.rows[0]?.next_id ?? 1;
 }
@@ -374,18 +376,35 @@ async function saveProduct(record: PayloadRecord) {
 
 export async function setProductSoldOut(productId: number, soldOut: boolean) {
   await requireAdminViewer();
-  await ensureDatabase();
-
-  if (!Number.isInteger(productId) || productId <= 0) {
+  if (!Number.isInteger(productId) || productId <= 0 || typeof soldOut !== "boolean") {
     throw new Error("Producto inválido.");
   }
+  await ensureDatabase();
 
-  await postgresPool!.query(
-    `update products set sold_out = $1, updated_at = now() where id = $2 and deleted_at is null`,
+  const result = await postgresPool!.query<{ id: number; status: string; sold_out: boolean }>(
+    `update products set sold_out = $1, updated_at = now() where id = $2 and deleted_at is null returning id, status, sold_out`,
     [soldOut, productId],
   );
-
+  const product = result.rows[0];
+  if (!product) throw new Error("El producto ya no existe.");
   refreshAdminViews();
+  return { id: product.id, status: product.status, soldOut: product.sold_out };
+}
+
+export async function setProductActive(productId: number, active: boolean) {
+  await requireAdminViewer();
+  if (!Number.isInteger(productId) || productId <= 0 || typeof active !== "boolean") {
+    throw new Error("Producto inválido.");
+  }
+  await ensureDatabase();
+  const result = await postgresPool!.query<{ id: number; status: string; sold_out: boolean }>(
+    `update products set status = $1, updated_at = now() where id = $2 and deleted_at is null returning id, status, sold_out`,
+    [active ? "published" : "inactive", productId],
+  );
+  const product = result.rows[0];
+  if (!product) throw new Error("El producto ya no existe.");
+  refreshAdminViews();
+  return { id: product.id, status: product.status, soldOut: product.sold_out };
 }
 
 async function saveBrand(record: PayloadRecord) {
@@ -942,6 +961,7 @@ async function saveRow(table: AdminTableKey, record: PayloadRecord) {
 async function deleteRow(table: AdminTableKey, id: string) {
   switch (table) {
     case "products":
+      await ensureProductIdSequence(postgresPool!);
       await postgresPool!.query("delete from products where id = $1", [toNumber(id)]);
       return;
     case "brands":

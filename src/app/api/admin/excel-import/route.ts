@@ -1,76 +1,32 @@
 import { revalidatePath } from "next/cache";
-import { applyExcelImport, buildExcelImportPlan, type ExcelImportAction, type ExcelImportMode } from "@/lib/excel-product-import";
+import { getCurrentViewer } from "@/infrastructure/auth/pintofruta-auth";
+import { applyExcelImport, buildExcelImportPlan } from "@/lib/excel-product-import";
+import { parseImportDecisions, PriceListError } from "@/lib/price-list";
 
 export const runtime = "nodejs";
 
-function parseMode(value: FormDataEntryValue | null): ExcelImportMode {
-  return value === "member" ? "member" : "guest";
-}
-
-function parseAction(value: FormDataEntryValue | null): ExcelImportAction {
-  return value === "apply" ? "apply" : "preview";
-}
-
-function refreshAppViews() {
-  revalidatePath("/admin");
-  revalidatePath("/");
-  revalidatePath("/galeria");
-  revalidatePath("/busqueda");
-  revalidatePath("/carrito");
-  revalidatePath("/producto/[sku]", "page");
-}
-
 export async function POST(request: Request) {
   try {
+    const viewer = await getCurrentViewer();
+    if (!viewer?.authenticated || !viewer.isAdmin) return Response.json({ ok: false, error: "No autorizado." }, { status: 403 });
     const formData = await request.formData();
-    const action = parseAction(formData.get("action"));
-    const mode = parseMode(formData.get("mode"));
-    const fileEntry = formData.get("file");
-
-    console.info("[admin-excel-import] request:start", {
-      action,
-      mode,
-      hasFile: fileEntry instanceof File,
-      fileName: fileEntry instanceof File ? fileEntry.name : null,
-      fileSize: fileEntry instanceof File ? fileEntry.size : null,
-    });
-
-    if (!(fileEntry instanceof File)) {
-      return Response.json({ ok: false, error: "Falta el archivo Excel." }, { status: 400 });
-    }
-
+    const action = formData.get("action");
+    if (action !== "preview" && action !== "apply") throw new PriceListError("Accion invalida.");
+    const file = formData.get("file");
+    if (!(file instanceof File)) throw new PriceListError("Falta el archivo Excel.");
+    const decisions = parseImportDecisions(formData.get("decisions"));
+    const plan = action === "apply"
+      ? await applyExcelImport(file, decisions, String(formData.get("revision") ?? ""))
+      : await buildExcelImportPlan(file, decisions);
     if (action === "apply") {
-      const plan = await applyExcelImport(fileEntry, mode);
-      refreshAppViews();
-
-      return Response.json({
-        ok: true,
-        action,
-        message: "Importación aplicada correctamente.",
-        plan,
-      });
+      for (const path of ["/admin", "/", "/galeria", "/busqueda", "/carrito"]) revalidatePath(path);
+      revalidatePath("/producto/[sku]", "page");
     }
-
-    const result = await buildExcelImportPlan(fileEntry, mode);
-
-    return Response.json({
-      ok: true,
-      action,
-      message: "Archivo analizado correctamente.",
-      plan: result.plan,
-    });
+    return Response.json({ ok: true, action, plan, message: action === "apply" ? "Lista de precios actualizada correctamente." : "Vista previa lista." });
   } catch (error) {
-    console.error("[admin-excel-import] request:error", {
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
+    if (!(error instanceof PriceListError)) console.error("[admin-excel-import]", error);
+    return Response.json({ ok: false, error: error instanceof Error ? error.message : "No se pudo procesar el Excel." }, {
+      status: error instanceof PriceListError ? error.status : 500,
     });
-    return Response.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "No se pudo procesar el Excel.",
-      },
-      { status: 500 },
-    );
   }
 }
-

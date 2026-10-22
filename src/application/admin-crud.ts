@@ -61,6 +61,7 @@ export interface AdminCrudViewModel {
   overview: AdminOverview;
   tables: AdminTableDefinition[];
   productSelectionRows: ProductItem[];
+  productAvailabilityRows: ProductItem[];
   orderExcelTemplates: {
     id: number;
     template_key: string;
@@ -527,14 +528,16 @@ export function buildAdminCrudViewModel(
   const orderedTables = tableOrder
     .map((key) => tables.find((table) => table.key === key))
     .filter((table): table is AdminTableDefinition => Boolean(table));
-  const productSelectionRows = [...(content.products ?? [])]
-    .filter((product) => String(product.status ?? "").toLowerCase() !== "inactive")
+  const productAvailabilityRows = [...(content.products ?? [])]
     .sort((left, right) => left.name.localeCompare(right.name, "es", { sensitivity: "base" }));
+  const productSelectionRows = productAvailabilityRows
+    .filter((product) => String(product.status ?? "").toLowerCase() !== "inactive");
 
   return {
     overview,
     tables: orderedTables,
     productSelectionRows,
+    productAvailabilityRows,
     orderExcelTemplates,
   };
 }
