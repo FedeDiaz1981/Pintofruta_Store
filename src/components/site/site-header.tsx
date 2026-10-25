@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Search, UserRound } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { Search, UserRound, X } from "lucide-react";
+import { useCallback, useEffect, useRef, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import type { DynamicHeaderMenu } from "@/application/catalog";
@@ -20,7 +20,6 @@ type SiteHeaderProps = {
 
 export function SiteHeader({ menus }: SiteHeaderProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
   const viewer = useViewer();
   const router = useRouter();
 
@@ -29,7 +28,6 @@ export function SiteHeader({ menus }: SiteHeaderProps) {
   }, []);
 
   const closeAllMenus = useCallback(() => {
-    setOpenMenuKey(null);
     document.querySelectorAll<HTMLDetailsElement>('details[name="pf-header-menu"]').forEach((details) => {
       details.open = false;
     });
@@ -142,8 +140,11 @@ export function SiteHeader({ menus }: SiteHeaderProps) {
                   key={menu.key}
                   name="pf-header-menu"
                   className="relative"
-                  onToggle={(event) => {
-                    setOpenMenuKey((event.currentTarget as HTMLDetailsElement).open ? menu.key : null);
+                  onKeyDown={(event) => {
+                    if (event.key !== "Escape") return;
+                    closeAllMenus();
+                    event.currentTarget.querySelector("summary")?.focus();
+                    event.preventDefault();
                   }}
                 >
                   <summary
@@ -152,47 +153,66 @@ export function SiteHeader({ menus }: SiteHeaderProps) {
                     {menu.label}
                   </summary>
                   <div
+                    role="region"
+                    aria-label={`Menú de ${menu.label.toLowerCase()}`}
                     className={[
-                      "absolute top-full z-[10060] mt-3 max-h-[calc(100dvh-18rem)] w-[min(calc(100vw-6rem),1100px)] overflow-y-auto overscroll-contain rounded-[1.75rem] border border-[var(--pf-border)] bg-[var(--pf-surface)] p-4 shadow-[0_24px_60px_rgba(74,57,38,0.16)]",
+                      "absolute top-full z-[10060] mt-3 flex max-h-[calc(100dvh-18rem)] w-[min(calc(100vw-6rem),1100px)] flex-col overflow-hidden rounded-[1.75rem] border border-[var(--pf-border)] bg-[var(--pf-surface)] p-4 shadow-[0_24px_60px_rgba(74,57,38,0.16)]",
                       menu.key === "brands" ? "left-0" : "right-0",
                     ].join(" ")}
                   >
-                    <div className="flex items-center justify-between gap-3 border-b border-[var(--pf-border-soft)] pb-4">
-                      <div>
+                    <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--pf-border-soft)] pb-4">
+                      <div className="min-w-0">
                         <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-[var(--pf-muted)]">{menu.label}</p>
                         <p className="text-sm text-[var(--pf-muted)]">Agrupado por letras</p>
                       </div>
-                      <Link href="/galeria" className="btn btn-ghost btn-sm rounded-full border border-[var(--pf-border)] normal-case">
-                        Ver todo
-                      </Link>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Link href="/galeria" onClick={closeAllMenus} className="btn btn-ghost btn-sm rounded-full border border-[var(--pf-border)] normal-case">
+                          Ver todo
+                        </Link>
+                        <button
+                          type="button"
+                          aria-label={`Cerrar menú de ${menu.label.toLowerCase()}`}
+                          title="Cerrar menú"
+                          className={`${buttonVariants({ variant: "ghost", size: "icon" })} border border-[var(--pf-border)]`}
+                          onClick={(event) => {
+                            const summary = event.currentTarget.closest("details")?.querySelector("summary");
+                            closeAllMenus();
+                            summary?.focus();
+                          }}
+                        >
+                          <X className="size-4" aria-hidden="true" />
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="mt-4 grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
-                      {menu.groups.map((group) => (
-                        <div key={group.label} className="rounded-[1.25rem] border border-[var(--pf-border-soft)] bg-[rgba(255,255,255,0.55)] p-4">
-                          <p className="mb-3 text-sm font-bold uppercase tracking-[0.22em] text-[var(--pf-primary-darker)]">{group.label}</p>
-                          <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]">
-                            {group.itemsByInitial.map((bucket) => (
-                              <div key={bucket.initial} className="h-full rounded-2xl border border-[var(--pf-border-soft)] bg-white/70 p-4">
-                                <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.24em] text-[var(--pf-muted)]">{bucket.initial}</p>
-                                <ul className="space-y-2">
-                                  {bucket.items.map((item) => (
-                                    <li key={item.href}>
-                                      <Link
-                                        href={item.href}
-                                        onClick={closeAllMenus}
-                                        className="block rounded-xl px-3 py-2 text-sm leading-5 text-[var(--pf-text)] break-words transition hover:bg-[rgba(168,109,69,0.08)] hover:text-[var(--pf-primary-darker)]"
-                                      >
-                                        {item.label}
-                                      </Link>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            ))}
+                    <div className="mt-4 min-h-0 overflow-y-auto overscroll-contain pr-2" role="group" aria-label={`Listado de ${menu.label.toLowerCase()}`} tabIndex={0}>
+                      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
+                        {menu.groups.map((group) => (
+                          <div key={group.label} className="rounded-[1.25rem] border border-[var(--pf-border-soft)] bg-[rgba(255,255,255,0.55)] p-4">
+                            <p className="mb-3 text-sm font-bold uppercase tracking-[0.22em] text-[var(--pf-primary-darker)]">{group.label}</p>
+                            <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]">
+                              {group.itemsByInitial.map((bucket) => (
+                                <div key={bucket.initial} className="h-full rounded-2xl border border-[var(--pf-border-soft)] bg-white/70 p-4">
+                                  <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.24em] text-[var(--pf-muted)]">{bucket.initial}</p>
+                                  <ul className="space-y-2">
+                                    {bucket.items.map((item) => (
+                                      <li key={item.href}>
+                                        <Link
+                                          href={item.href}
+                                          onClick={closeAllMenus}
+                                          className="block rounded-xl px-3 py-2 text-sm leading-5 text-[var(--pf-text)] break-words transition hover:bg-[rgba(168,109,69,0.08)] hover:text-[var(--pf-primary-darker)]"
+                                        >
+                                          {item.label}
+                                        </Link>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </details>

@@ -389,7 +389,13 @@ export async function getHomePageViewModel(): Promise<HomePageViewModel> {
   const banners = [...content.banners].filter((item) => item.active).sort((a, b) => a.order - b.order);
   const heroSlides = [...content.heroSlides]
     .filter((item) => item.active)
-    .sort((a, b) => a.order - b.order);
+    .sort((a, b) => a.order - b.order)
+    .map((slide) => ({
+      ...slide,
+      imageProduct: slide.imageAction === "product"
+        ? content.products.find((product) => product.id === slide.imageProductId && product.status === "published" && !product.soldOut)
+        : undefined,
+    }));
   const spotlightSlide = heroSlides.find((item) => item.homeSpotlight) ?? heroSlides[0] ?? null;
   const featuredProducts = buildFeaturedProducts(content.products, 12);
   const trendingProducts = buildTrendingProducts(content.products, 8);

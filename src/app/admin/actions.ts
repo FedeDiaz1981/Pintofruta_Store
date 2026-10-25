@@ -7,6 +7,7 @@ import { createSupabaseServiceClient, requireAdminViewer } from "@/infrastructur
 import { siteContentSchemaSql } from "@/infrastructure/site-content/schema";
 import { normalizeText } from "@/lib/catalog";
 import { resolveCategoryIconKey } from "@/lib/category-icons";
+import { HERO_IMAGE_LINK_ERROR, resolveHeroImageHref } from "@/lib/hero-links";
 import type { AdminTableKey } from "@/application/admin-crud";
 import type { PoolClient } from "pg";
 
@@ -589,12 +590,34 @@ async function saveUser(record: PayloadRecord) {
 }
 
 async function saveHeroSlide(record: PayloadRecord) {
+  const imageAction = toStringValue(record.imageAction) || "url";
+  if (imageAction !== "url" && imageAction !== "product") {
+    throw new Error("La acci\u00f3n de la imagen no es v\u00e1lida.");
+  }
+  const imageLink = imageAction === "url" ? toStringValue(record.imageLink) : "";
+  if (imageLink && !resolveHeroImageHref(imageLink)) {
+    throw new Error(HERO_IMAGE_LINK_ERROR);
+  }
+  let imageProductId: number | null = null;
+  if (imageAction === "product") {
+    imageProductId = Number(record.imageProductId);
+    if (!Number.isSafeInteger(imageProductId) || imageProductId <= 0 || imageProductId > 2147483647) {
+      throw new Error("Seleccion\u00e1 un producto para la imagen.");
+    }
+    const product = await postgresPool!.query(
+      "select id from products where id = $1 and status = 'published' and deleted_at is null and coalesce(sold_out, false) = false",
+      [imageProductId],
+    );
+    if (product.rows.length === 0) {
+      throw new Error("El producto no est\u00e1 disponible: puede estar inactivo, agotado o eliminado.");
+    }
+  }
   const id = record.id ? toNumber(record.id) : await nextNumericId("hero_slides");
   await postgresPool!.query(
     `
       insert into hero_slides (
-        id, order_index, title, subtitle, badge, image, image_mobile, link, active, home_spotlight
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        id, order_index, title, subtitle, badge, image, image_mobile, link, image_link, active, home_spotlight, image_action, image_product_id
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
       on conflict (id) do update set
         order_index = excluded.order_index,
         title = excluded.title,
@@ -603,8 +626,11 @@ async function saveHeroSlide(record: PayloadRecord) {
         image = excluded.image,
         image_mobile = excluded.image_mobile,
         link = excluded.link,
+        image_link = excluded.image_link,
         active = excluded.active,
-        home_spotlight = excluded.home_spotlight
+        home_spotlight = excluded.home_spotlight,
+        image_action = excluded.image_action,
+        image_product_id = excluded.image_product_id
     `,
     [
       id,
@@ -615,8 +641,11 @@ async function saveHeroSlide(record: PayloadRecord) {
       toStringValue(record.image),
       toStringValue(record.imageMobile) || null,
       toStringValue(record.link),
+      imageLink || null,
       toBoolean(record.active),
       record.homeSpotlight == null || record.homeSpotlight === "" ? null : toBoolean(record.homeSpotlight),
+      imageAction,
+      imageProductId,
     ],
   );
 }

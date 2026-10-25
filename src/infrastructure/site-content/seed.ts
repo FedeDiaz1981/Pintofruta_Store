@@ -55,6 +55,9 @@ export type SeedHeroSlide = {
   image: string;
   image_mobile: string | null;
   link: string;
+  image_link: string | null;
+  image_action: "url" | "product";
+  image_product_id: number | null;
   active: boolean;
   home_spotlight: boolean | null;
 };

@@ -188,8 +188,8 @@ async function seedIfNeeded(client: PoolClient) {
       await client.query(
         `
           insert into hero_slides (
-            id, order_index, title, subtitle, badge, image, image_mobile, link, active, home_spotlight
-          ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            id, order_index, title, subtitle, badge, image, image_mobile, link, image_link, active, home_spotlight, image_action, image_product_id
+          ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         `,
         [
           slide.id,
@@ -200,8 +200,11 @@ async function seedIfNeeded(client: PoolClient) {
           slide.image,
           slide.imageMobile ?? null,
           slide.link,
+          slide.imageLink ?? null,
           slide.active,
           slide.homeSpotlight ?? null,
+          slide.imageAction ?? "url",
+          slide.imageProductId ?? null,
         ],
       );
     }
@@ -319,7 +322,7 @@ export const getSiteContent = cache(async (): Promise<SiteContentDocument> => {
       readRows<NavSectionRow>(contentPool, "select id, label, icon, href, sort_order from header_sections order by sort_order, id"),
       readRows<NavGroupRow>(contentPool, "select id, section_id, label, href, sort_order from header_groups order by sort_order, id"),
       readRows<NavItemRow>(contentPool, "select id, group_id, label, href, sort_order from header_group_items order by sort_order, id"),
-      readRows<HeroSlideRow>(contentPool, "select id, order_index, title, subtitle, badge, image, image_mobile, link, active, home_spotlight from hero_slides order by order_index, id"),
+      readRows<HeroSlideRow>(contentPool, "select id, order_index, title, subtitle, badge, image, image_mobile, link, image_link, active, home_spotlight, image_action, image_product_id from hero_slides order by order_index, id"),
       readRows<BannerRow>(contentPool, "select id, text, order_index, active from banners order by order_index, id"),
       readRows<ProductRow>(contentPool, "select id, sku, name, detail, presentation, category_id, category_name, category_ids, category_names, brand, vegano, kosher, testeado_en_animales, public_price, member_price, image, status, sold_out, featured, featured_priority, trending, stock, views_count, sales_count, description, source_section, template_row_map, created_at, updated_at from products where deleted_at is null order by id"),
       readRows<PackRow>(contentPool, "select id, apodo, title, description, category, public_price, image, active, featured, order_index, created_at, updated_at from promotion_packs order by order_index, id"),

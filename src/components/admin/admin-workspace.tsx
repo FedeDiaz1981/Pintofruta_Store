@@ -11,6 +11,7 @@ import { PriceListDownloadButton } from "@/components/admin/price-list-download-
 import { ProductImageManager } from "@/components/admin/product-image-manager";
 import { ProductAvailabilityManager } from "@/components/admin/product-availability-manager";
 import { ProductDuplicatesManager } from "@/components/admin/product-duplicates-manager";
+import { HeroImageActionField } from "@/components/admin/hero-image-action-field";
 import type {
   AdminCrudViewModel,
   AdminFieldDefinition,
@@ -67,6 +68,9 @@ const sidebarSections: { title: string; keys: AdminTableKey[] }[] = [
 ];
 
 function toDraftValue(field: AdminFieldDefinition, value: unknown): string | number | boolean | null {
+  if (field.kind === "hero_image_action") {
+    return value === "product" ? "product" : "url";
+  }
   if (field.key === "role" && field.kind === "select" && typeof value === "string") {
     const normalized = value.toLowerCase();
     if (normalized === "admin") {
@@ -144,6 +148,10 @@ function emptyDraftFor(table: AdminTableDefinition): DraftRecord {
   const draft: DraftRecord = {};
 
   for (const field of table.fields) {
+    if (field.kind === "hero_image_action") {
+      draft[field.key] = "url";
+      continue;
+    }
     if (field.kind === "boolean") {
       draft[field.key] = ["active", "visible", "homeMenu"].includes(field.key);
       continue;
@@ -1439,14 +1447,26 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
               <input type="hidden" name="table" value={editor.tableKey} />
               <input type="hidden" name="payload_json" value={stringifyDraft(editor.draft)} />
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
                 {selectedTable.fields.map((field) => {
                   if (field.hidden || field.readonly) {
                     return null;
                   }
 
                   const value = editor.draft[field.key];
-              const fullWidth =
+                  if (field.kind === "hero_image_action") {
+                    return (
+                      <HeroImageActionField
+                        key={field.key}
+                        mode={value === "product" ? "product" : "url"}
+                        url={String(editor.draft.imageLink ?? "")}
+                        productId={String(editor.draft.imageProductId ?? "")}
+                        products={model.productAvailabilityRows}
+                        onChange={(changes) => setEditor((current) => current ? { ...current, draft: { ...current.draft, ...changes } } : current)}
+                      />
+                    );
+                  }
+                  const fullWidth =
                     field.kind === "textarea" ||
                     field.kind === "file" ||
                     field.kind === "select" ||

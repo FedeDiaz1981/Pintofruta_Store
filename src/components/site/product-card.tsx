@@ -38,7 +38,7 @@ export function ProductCard({
   const cartSubtotal = cartQuantity * unitPrice;
 
   return (
-    <article className="group flex h-full min-h-[24.5rem] flex-col overflow-hidden rounded-[1.5rem] border border-[rgba(74,57,38,0.16)] bg-white shadow-[0_10px_28px_rgba(74,57,38,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_38px_rgba(74,57,38,0.14)]">
+    <article className="group flex h-full min-h-[24.5rem] min-w-0 flex-col overflow-hidden rounded-[1.5rem] border border-[rgba(74,57,38,0.16)] bg-white shadow-[0_10px_28px_rgba(74,57,38,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_38px_rgba(74,57,38,0.14)]">
       <button
         type="button"
         onClick={() => {
@@ -50,7 +50,7 @@ export function ProductCard({
         disabled={isOutOfStock}
         aria-disabled={isOutOfStock}
       >
-        <div className="relative aspect-[1/1] w-full overflow-hidden bg-[linear-gradient(180deg,rgba(252,249,243,1),rgba(246,240,230,1))]">
+        <div className="relative h-60 w-full overflow-hidden bg-[linear-gradient(180deg,rgba(252,249,243,1),rgba(246,240,230,1))] md:h-64">
           <div className="absolute left-3 top-3 z-10">
             {isNew ? (
               <span className="inline-flex items-center justify-center rounded-full border border-[rgba(168,109,69,0.2)] bg-[rgba(129,84,44,0.96)] px-4 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-white shadow-[0_10px_20px_rgba(74,57,38,0.18)]">
@@ -73,8 +73,8 @@ export function ProductCard({
                 src={publicAsset(product.image)}
                 alt={product.name}
                 fill
-                className="object-contain p-4 transition duration-500 group-hover:scale-[1.03]"
-                sizes="(max-width: 768px) 82vw, 19rem"
+                className="mx-auto max-w-60 object-contain p-4 md:max-w-64"
+                sizes="(max-width: 767px) 240px, 256px"
               />
             </div>
           </div>
@@ -89,11 +89,11 @@ export function ProductCard({
               onSelect?.(product);
             }
           }}
-          className={`w-full text-center ${isOutOfStock ? "cursor-not-allowed" : ""}`}
+          className={`min-w-0 w-full text-center ${isOutOfStock ? "cursor-not-allowed" : ""}`}
           disabled={isOutOfStock}
           aria-disabled={isOutOfStock}
         >
-          <h3 className="line-clamp-2 text-balance text-[0.92rem] font-semibold leading-[1.25] tracking-tight text-[var(--pf-text)] sm:text-[0.96rem]">
+          <h3 title={product.name} className="line-clamp-2 min-w-0 w-full whitespace-normal text-balance text-[0.92rem] font-semibold leading-[1.25] tracking-normal text-[var(--pf-text)] [overflow-wrap:anywhere] sm:text-[0.96rem] md:line-clamp-3 md:min-h-[3.6rem]">
             {product.name}
           </h3>
           {product.presentation ? (

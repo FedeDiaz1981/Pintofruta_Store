@@ -1,18 +1,26 @@
 import Link from "next/link";
 
-import type { HeroSlide } from "@/domain/site-content";
+import type { HeroBannerSlide } from "@/domain/site-content";
 
 import { buttonVariants } from "@/components/ui/button";
 import { publicAsset } from "@/lib/catalog";
+import { BannerImageLink } from "./banner-image-link";
+import { MobileBannerSlide } from "./mobile-banner-slide";
+import styles from "./hero-carousel.module.css";
 
-export function SpotlightBanner({ slide }: { slide: HeroSlide | null }) {
+export function SpotlightBanner({ slide }: { slide: HeroBannerSlide | null }) {
   if (!slide) {
     return null;
   }
 
   return (
-    <section className="relative w-full bg-transparent">
-      <div className="pf-shell px-4 sm:px-6 lg:px-12">
+    <section aria-label="Banner destacado" className="relative w-full bg-transparent">
+      <div className={`${styles.mobile} md:hidden`}>
+        <div className={styles.viewport}>
+          <MobileBannerSlide slide={slide} />
+        </div>
+      </div>
+      <div className="pf-shell hidden px-4 sm:px-6 md:block lg:px-12">
         <div className="relative overflow-visible bg-[var(--pf-surface)]">
           <div className="relative grid h-[clamp(306px,49vw,544px)] w-full grid-cols-[3fr_2fr] overflow-hidden">
             <div className="relative flex h-full items-center overflow-hidden bg-[linear-gradient(90deg,rgba(248,242,232,0.98)_0%,rgba(248,242,232,0.92)_100%)]">
@@ -34,15 +42,17 @@ export function SpotlightBanner({ slide }: { slide: HeroSlide | null }) {
             </div>
 
             <div className="relative flex items-center justify-end overflow-hidden bg-[linear-gradient(180deg,rgba(248,242,232,0.98)_0%,rgba(248,242,232,0.94)_100%)]">
-              <picture className="block h-full w-full">
-                {slide.imageMobile ? <source media="(max-width: 767px)" srcSet={publicAsset(slide.imageMobile)} /> : null}
-                <img
-                  src={publicAsset(slide.image)}
-                  alt={slide.title}
-                  className="h-full w-full object-contain object-right"
-                  loading="lazy"
-                />
-              </picture>
+              <BannerImageLink slide={slide}>
+                <picture className={styles.picture}>
+                  {slide.imageMobile ? <source media="(max-width: 767px)" srcSet={publicAsset(slide.imageMobile)} /> : null}
+                  <img
+                    src={publicAsset(slide.image)}
+                    alt={slide.title}
+                    className={styles.image}
+                    loading="lazy"
+                  />
+                </picture>
+              </BannerImageLink>
             </div>
           </div>
         </div>

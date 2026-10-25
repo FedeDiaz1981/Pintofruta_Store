@@ -54,9 +54,16 @@ export const siteContentSchemaSql = `
     image text not null,
     image_mobile text,
     link text not null,
+    image_link text,
+    image_action text not null default 'url' check (image_action in ('url', 'product')),
+    image_product_id integer,
     active boolean not null,
     home_spotlight boolean
   );
+
+  alter table hero_slides add column if not exists image_link text;
+  alter table hero_slides add column if not exists image_action text not null default 'url' check (image_action in ('url', 'product'));
+  alter table hero_slides add column if not exists image_product_id integer;
 
   create table if not exists banners (
     id integer primary key,

@@ -21,6 +21,7 @@ export type AdminFieldKind =
   | "boolean"
   | "textarea"
   | "pack_products"
+  | "hero_image_action"
   | "multiselect"
   | "file"
   | "select"
@@ -362,7 +363,10 @@ export function getAdminTableDefinitions(content: SiteContentDocument): AdminTab
         textField("badge", "Etiqueta", true),
         fileField("image", "Imagen", true, "Subí la imagen principal del carrusel."),
         fileField("imageMobile", "Imagen móvil", false, "Subí la versión para mobile."),
-        textField("link", "Enlace", true),
+        textField("link", "Enlace del botón", true),
+        { key: "imageAction", label: "Acci\u00f3n de la imagen", kind: "hero_image_action" },
+        { ...textField("imageLink", "Enlace de la imagen"), hidden: true },
+        { ...numberField("imageProductId", "Producto de la imagen"), hidden: true },
         booleanField("active", "Activo"),
         booleanField("homeSpotlight", "Destacado en inicio"),
       ],

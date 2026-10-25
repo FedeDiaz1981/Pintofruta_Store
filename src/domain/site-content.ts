@@ -7,6 +7,9 @@ export interface HeroSlide {
   image: string;
   imageMobile?: string;
   link: string;
+  imageLink?: string;
+  imageAction?: "url" | "product";
+  imageProductId?: number;
   active: boolean;
   homeSpotlight?: boolean;
 }
@@ -156,10 +159,14 @@ export interface SiteContentDocument {
   };
 }
 
+export interface HeroBannerSlide extends HeroSlide {
+  imageProduct?: ProductItem;
+}
+
 export interface HomePageViewModel {
   banners: BannerItem[];
-  heroSlides: HeroSlide[];
-  spotlightSlide: HeroSlide | null;
+  heroSlides: HeroBannerSlide[];
+  spotlightSlide: HeroBannerSlide | null;
   featuredBanner: BannerItem | null;
   secondaryBanner: BannerItem | null;
   brands: BrandItem[];

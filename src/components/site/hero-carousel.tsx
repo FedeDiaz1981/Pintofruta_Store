@@ -4,16 +4,18 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import useEmblaCarousel from "embla-carousel-react";
-import type { HeroSlide } from "@/domain/site-content";
+import type { HeroBannerSlide } from "@/domain/site-content";
 import { publicAsset } from "@/lib/catalog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import styles from "./hero-carousel.module.css";
+import { BannerImageLink } from "./banner-image-link";
+import { MobileBannerSlide } from "./mobile-banner-slide";
 
 function resolveHref(href: string) {
   return href.replace("galeria.html", "/galeria").replace("busqueda.html", "/busqueda");
 }
 
-function MobileHeroCarousel({ slides }: { slides: HeroSlide[] }) {
+function MobileHeroCarousel({ slides }: { slides: HeroBannerSlide[] }) {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: slides.length > 1, align: "start" });
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -46,27 +48,7 @@ function MobileHeroCarousel({ slides }: { slides: HeroSlide[] }) {
 
               return (
                 <div key={slide.id} className="h-full min-w-0 flex-[0_0_100%]" aria-hidden={!active} inert={!active}>
-                  <article className={styles.slide}>
-                    <div className={styles.copy}>
-                      <span className={styles.badge}>{slide.badge}</span>
-                      <h1 className={styles.title}>{slide.title}</h1>
-                      <p className={styles.subtitle}>{slide.subtitle}</p>
-                      <Link href={resolveHref(slide.link)} className={`${buttonVariants({ variant: "primary", size: "sm" })} ${styles.link}`}>
-                        Ir a la galer&iacute;a
-                      </Link>
-                    </div>
-                    <picture className={styles.picture}>
-                      {slide.imageMobile ? <source media="(max-width: 767px)" srcSet={publicAsset(slide.imageMobile)} /> : null}
-                      <img
-                        src={publicAsset(slide.image)}
-                        alt={slide.title}
-                        className={styles.image}
-                        loading={index === 0 ? "eager" : "lazy"}
-                        fetchPriority={index === 0 ? "high" : "auto"}
-                      />
-                    </picture>
-
-                  </article>
+                  <MobileBannerSlide slide={slide} heading="h1" buttonHref={resolveHref(slide.link)} priority={index === 0} />
                 </div>
               );
             })}
@@ -92,7 +74,7 @@ function MobileHeroCarousel({ slides }: { slides: HeroSlide[] }) {
   );
 }
 
-export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
+export function HeroCarousel({ slides }: { slides: HeroBannerSlide[] }) {
   const orderedSlides = useMemo(() => [...slides].sort((left, right) => left.order - right.order), [slides]);
   const [activeIndex, setActiveIndex] = useState(0);
   const desktopHeroRef = useRef<HTMLElement | null>(null);
@@ -176,6 +158,7 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                   key={slide.id}
                   className={`absolute inset-0 grid grid-cols-[3fr_2fr] transition-opacity duration-700 ease-out ${active ? "opacity-100" : "pointer-events-none opacity-0"}`}
                   aria-hidden={!active}
+                  inert={!active}
                 >
                   <div className="relative flex h-full items-center overflow-hidden bg-[linear-gradient(90deg,rgba(248,242,232,0.98)_0%,rgba(248,242,232,0.92)_100%)]">
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_left_center,rgba(74,57,38,0.08),transparent_54%)]" />
@@ -196,16 +179,18 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                   </div>
 
                   <div className="relative flex items-center justify-end overflow-hidden bg-[linear-gradient(180deg,rgba(248,242,232,0.98)_0%,rgba(248,242,232,0.94)_100%)]">
-                    <picture className="block h-full w-full">
-                      {slide.imageMobile ? <source media="(max-width: 767px)" srcSet={publicAsset(slide.imageMobile)} /> : null}
-                      <img
-                        src={publicAsset(slide.image)}
-                        alt={slide.title}
-                        className="h-full w-full object-contain object-right"
-                        loading={index === 0 ? "eager" : "lazy"}
-                        fetchPriority={index === 0 ? "high" : "auto"}
-                      />
-                    </picture>
+                    <BannerImageLink slide={slide}>
+                      <picture className={styles.picture}>
+                        {slide.imageMobile ? <source media="(max-width: 767px)" srcSet={publicAsset(slide.imageMobile)} /> : null}
+                        <img
+                          src={publicAsset(slide.image)}
+                          alt={slide.title}
+                          className={styles.image}
+                          loading={index === 0 ? "eager" : "lazy"}
+                          fetchPriority={index === 0 ? "high" : "auto"}
+                        />
+                      </picture>
+                    </BannerImageLink>
                   </div>
                 </div>
               );
