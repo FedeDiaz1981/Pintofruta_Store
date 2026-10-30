@@ -61,8 +61,8 @@ export function ProductDuplicatesManager({ groups, onClose, onEdit, onDelete }: 
       <button type="button" className={styles.iconButton} aria-label="Cerrar productos duplicados" title="Cerrar" disabled={saving} onClick={() => dialogRef.current?.close()}><X size={20} /></button>
     </header>
     <div className={styles.filters}>
-      <label className={styles.search}><Search size={18} aria-hidden="true" /><span className="sr-only">Buscar duplicados por ID, nombre o marca</span>
-        <input type="search" value={query} placeholder="ID, nombre o marca" onChange={(event) => { setQuery(event.target.value); setPage(1); }} />
+      <label className={styles.search}><Search size={18} aria-hidden="true" /><span className="sr-only">Buscar duplicados por ID, nombre, descripción o marca</span>
+        <input type="search" value={query} placeholder="ID, nombre, descripción o marca" onChange={(event) => { setQuery(event.target.value); setPage(1); }} />
       </label>
       {error && <p className={styles.error} role="alert">{error}</p>}
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, CheckCircle2, FileSpreadsheet, LoaderCircle, X } from "lucide-react";
 import type { ExcelImportPlan, ImportDecision, PriceListPreviewRow } from "@/lib/price-list";
@@ -36,6 +36,8 @@ export function ExcelImportButton({ disabled = false, className }: { disabled?: 
   const [busy, setBusy] = useState<"preview" | "apply" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [tab, setTab] = useState<"included" | "excluded">("included");
+  const tabsId = useId();
 
   useEffect(() => {
     if (open && !dialogRef.current?.open) dialogRef.current?.showModal();
@@ -47,9 +49,12 @@ export function ExcelImportButton({ disabled = false, className }: { disabled?: 
   }, [resolutionRow]);
 
   const matches = plan?.rows.filter((row) => row.id === null && row.candidates.length) ?? [];
+  const included = plan?.rows.filter((row) => row.action === "create" || row.action === "update") ?? [];
+  const excluded = plan?.rows.filter((row) => row.action !== "create" && row.action !== "update") ?? [];
+  const visibleRows = tab === "included" ? included : excluded;
   const activeRow = matches.find((row) => row.rowNumber === resolutionRow);
   const activeIndex = matches.findIndex((row) => row.rowNumber === resolutionRow);
-  const canApply = plan && !plan.errors.length && !plan.unresolvedRows && !busy && !success
+  const canApply = plan && !busy && !success
     && plan.createdProducts + plan.updatedProducts > 0;
 
   function openResolution(row: PriceListPreviewRow, choices: ImportDecision[]) {
@@ -66,6 +71,7 @@ export function ExcelImportButton({ disabled = false, className }: { disabled?: 
     setResolutionRow(null);
     setError(null);
     setSuccess(false);
+    setTab("included");
     if (fileRef.current) fileRef.current.value = "";
     setOpen(true);
   }
@@ -77,6 +83,7 @@ export function ExcelImportButton({ disabled = false, className }: { disabled?: 
     try {
       const next = await postImport(file, "preview", choices);
       setPlan(next);
+      setTab(next.createdProducts + next.updatedProducts ? "included" : "excluded");
       setDecisions(choices);
       const pending = next.rows.find((row) => row.action === "resolve");
       if (pending) openResolution(pending, choices);
@@ -103,7 +110,8 @@ export function ExcelImportButton({ disabled = false, className }: { disabled?: 
     setBusy("apply");
     setError(null);
     try {
-      await postImport(file, "apply", decisions, plan.revision);
+      const applied = await postImport(file, "apply", decisions, plan.revision);
+      setPlan(applied);
       setSuccess(true);
       router.refresh();
     } catch (cause) {
@@ -125,36 +133,56 @@ export function ExcelImportButton({ disabled = false, className }: { disabled?: 
         <button type="button" className={styles.iconButton} aria-label="Cerrar importacion" title="Cerrar" disabled={!!busy} onClick={() => setOpen(false)}><X size={20} /></button>
       </header>
       <div className={styles.body}>
-        {success ? <div className={styles.success} role="status"><CheckCircle2 size={30} /><h3>Lista actualizada</h3><p>{plan?.updatedProducts ?? 0} actualizados · {plan?.createdProducts ?? 0} nuevos</p></div> : <>
+        {success ? <div className={styles.success} role="status"><CheckCircle2 size={30} /><h3>Lista actualizada</h3><p>{plan?.updatedProducts ?? 0} actualizados · {plan?.createdProducts ?? 0} nuevos · {plan?.skippedProducts ?? 0} no importados</p></div> : <>
           <label className={styles.fileLabel}>Archivo Excel
             <input ref={fileRef} type="file" accept=".xlsx,.xls" disabled={!!busy} onChange={(event) => {
               setFile(event.target.files?.[0] ?? null); setPlan(null); setDecisions([]); setError(null);
             }} />
           </label>
           {error && <p className={styles.error} role="alert">{error}</p>}
-          {plan && <>
+        </>}
+        {plan && <>
+          {!success && <>
             <dl className={styles.summary}>
               <div><dt>Nuevos</dt><dd>{plan.createdProducts}</dd></div>
               <div><dt>A actualizar</dt><dd>{plan.updatedProducts}</dd></div>
               <div><dt>Sin cambios</dt><dd>{plan.unchangedProducts}</dd></div>
-              <div><dt>Por resolver</dt><dd>{plan.unresolvedRows}</dd></div>
+              <div><dt>No se importan</dt><dd>{excluded.length}</dd></div>
             </dl>
-            {!!plan.errors.length && <div className={styles.error} role="alert"><strong>Hay conflictos en la lista</strong><ul>{plan.errors.slice(0, 30).map((message, index) => <li key={index}>{message}</li>)}</ul>{plan.errors.length > 30 && <p>Y {plan.errors.length - 30} errores mas.</p>}</div>}
+            <p className={styles.notice}>{included.length ? `Cambios a aplicar: ${included.length}. Registros que se omiten: ${excluded.length}. Revisá el motivo en la segunda solapa.` : "No hay cambios válidos para importar. Revisá el motivo en cada registro."}</p>
             {!!matches.length && <button className={styles.button} type="button" disabled={!!busy} onClick={() => openResolution(matches.find((row) => row.action === "resolve" || row.action === "error") ?? matches[0], decisions)}>Revisar coincidencias ({matches.length})</button>}
-            <div className={styles.tableWrap}>
+          </>}
+          <div className={styles.tabs} role="tablist" aria-label="Resultado de la importacion" onKeyDown={(event) => {
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+            event.preventDefault();
+            const next = event.key === "Home" ? "included" : event.key === "End" ? "excluded" : tab === "included" ? "excluded" : "included";
+            setTab(next);
+            event.currentTarget.querySelector<HTMLButtonElement>(`[data-tab="${next}"]`)?.focus();
+          }}>
+            <button type="button" role="tab" id={`${tabsId}-included`} data-tab="included" aria-selected={tab === "included"} aria-controls={`${tabsId}-panel`} tabIndex={tab === "included" ? 0 : -1} onClick={() => setTab("included")}>
+              {success ? "Importados" : "Se importarán"} <span>{included.length}</span>
+            </button>
+            <button type="button" role="tab" id={`${tabsId}-excluded`} data-tab="excluded" aria-selected={tab === "excluded"} aria-controls={`${tabsId}-panel`} tabIndex={tab === "excluded" ? 0 : -1} onClick={() => setTab("excluded")}>
+              {success ? "No importados" : "No se importarán"} <span>{excluded.length}</span>
+            </button>
+          </div>
+          <div role="tabpanel" id={`${tabsId}-panel`} aria-labelledby={`${tabsId}-${tab}`} tabIndex={0}>
+            {visibleRows.length ? <div className={styles.tableWrap}>
               <table className={styles.table}>
-                <thead><tr><th>Fila / ID</th><th>Nombre / Marca</th><th>Precio publico</th><th>Precio logueado</th><th>Estado</th></tr></thead>
-                <tbody>{plan.rows.map((row) => <tr key={row.rowNumber}>
-                  <td><span className={styles.muted}>Fila {row.rowNumber}</span><br />{row.productId ? `ID ${row.productId}` : "Sin ID"}</td>
-                  <td><strong>{row.name}</strong><span className={styles.secondary}>{row.brand}</span>
+                <thead><tr><th>Fila / ID</th><th>Nombre / Marca</th><th>Precio publico</th><th>Precio logueado</th><th>{tab === "excluded" ? "Motivo" : "Acción"}</th></tr></thead>
+                <tbody>{visibleRows.map((row) => <tr key={row.rowNumber}>
+                  <td><span className={styles.muted}>Fila {row.rowNumber}</span><br />{row.productId || row.id ? `ID ${row.productId ?? row.id}` : row.rawValues?.id || "Sin ID"}</td>
+                  <td><strong>{row.name || "Sin nombre"}</strong><span className={styles.secondary}>{row.brand || "Sin marca"}</span>
                     {row.current && row.current.name !== row.name && <span className={styles.secondary}>Antes: {row.current.name}</span>}</td>
-                  <td>{row.current && row.current.public_price !== row.publicPrice && <del className={styles.secondary}>{formatCurrency(row.current.public_price)}</del>}{formatCurrency(row.publicPrice)}</td>
-                  <td>{row.current && row.current.member_price !== row.memberPrice && <del className={styles.secondary}>{formatCurrency(row.current.member_price)}</del>}{formatCurrency(row.memberPrice)}</td>
-                  <td><span className={styles.state} data-state={row.action}>{actionLabels[row.action]}</span></td>
+                  <td>{row.current && row.current.public_price !== row.publicPrice && <del className={styles.secondary}>{formatCurrency(row.current.public_price)}</del>}{row.rawValues ? row.rawValues.publicPrice || "Sin precio" : formatCurrency(row.publicPrice)}</td>
+                  <td>{row.current && row.current.member_price !== row.memberPrice && <del className={styles.secondary}>{formatCurrency(row.current.member_price)}</del>}{row.rawValues ? row.rawValues.memberPrice || "Sin precio" : formatCurrency(row.memberPrice)}</td>
+                  <td className={styles.reason}><span className={styles.state} data-state={row.action}>{actionLabels[row.action]}</span>
+                    {tab === "excluded" && (row.errors.length ? <ul>{row.errors.map((message, index) => <li key={index}>{message}</li>)}</ul> : <p>{row.action === "unchanged" ? "Los datos son iguales a los registrados; no hay cambios para aplicar." : "Falta elegir si corresponde a un producto existente o es un producto nuevo. Revisa las coincidencias."}</p>)}
+                  </td>
                 </tr>)}</tbody>
               </table>
-            </div>
-          </>}
+            </div> : <p className={styles.empty}>{tab === "included" ? "No hay cambios para importar." : "Todos los registros se pueden importar."}</p>}
+          </div>
         </>}
       </div>
       <footer className={styles.footer}>

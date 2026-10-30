@@ -35,7 +35,7 @@ async function SearchPageContent({
       <SectionHeading
         eyebrow="Búsqueda"
         title="Resultados dinámicos"
-        description="La búsqueda ya filtra por texto, marca y categoría desde la capa de aplicación."
+        description="Buscá por nombre, descripción, marca o categoría. Podés combinar palabras en cualquier orden."
         action={
           <Link href="/galeria" className={buttonVariants({ variant: "outline", size: "md" })}>
             Ver todo

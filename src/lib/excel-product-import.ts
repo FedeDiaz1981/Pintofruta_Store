@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import { postgresPool } from "@/infrastructure/db/postgres";
 import { allocateProductIds } from "@/infrastructure/db/product-ids";
 import { normalizeText } from "@/lib/catalog";
+import { getProductFieldErrors, parseProductCategoryIds, PRODUCT_INTEGER_MAX } from "@/lib/product-validation";
 import { parsePriceList, planPriceListImport, PriceListError, MAX_PRICE_LIST_BYTES, type ImportDecision, type PriceListProduct, type ExcelImportPlan } from "@/lib/price-list";
 
 export type { ExcelImportPlan } from "@/lib/price-list";
@@ -12,6 +13,29 @@ export async function readPriceListProducts(client: Pick<PoolClient, "query">) {
     "select id, name, brand, public_price, member_price from products where deleted_at is null order by id",
   );
   return result.rows;
+}
+
+async function readImportProducts(client: Pick<PoolClient, "query">): Promise<PriceListProduct[]> {
+  const products = await client.query<PriceListProduct & { detail: string; category_id: number; category_ids: unknown; featured_priority: number | null }>(
+    "select id, name, brand, public_price, member_price, detail, category_id, category_ids, featured_priority from products where deleted_at is null order by id",
+  );
+  const categories = await client.query<{ id: number }>("select id from categories where deleted_at is null");
+  const validCategories = new Set(categories.rows.map((category) => category.id));
+  const brands = await client.query<{ name: string }>("select name from brands");
+  const canonicalBrands = new Map(brands.rows.map((brand) => [normalizeText(brand.name).trim(), brand.name]));
+  return products.rows.map((product) => {
+    const storedIds = parseProductCategoryIds(product.category_ids);
+    const categoryIds = storedIds?.length ? storedIds : [product.category_id];
+    const errors = getProductFieldErrors({ detail: product.detail, categoryIds, featuredPriority: product.featured_priority }, ["detail", "categoryIds", "featuredPriority"]);
+    if (!storedIds || !validCategories.has(product.category_id) || categoryIds.some((id) => !validCategories.has(id))) {
+      errors.categoryIds = "Las categorias del producto faltan o fueron eliminadas.";
+    }
+    return {
+      id: product.id, name: product.name, brand: product.brand, public_price: product.public_price, member_price: product.member_price,
+      validationErrors: Object.values(errors),
+      brandNeedsSync: canonicalBrands.get(normalizeText(product.brand).trim()) !== product.brand,
+    };
+  });
 }
 
 async function readFile(file: File) {
@@ -28,7 +52,7 @@ async function readFile(file: File) {
 export async function buildExcelImportPlan(file: File, decisions: ImportDecision[] = []) {
   if (!postgresPool) throw new Error("DATABASE_URL no esta configurada.");
   const parsed = await readFile(file);
-  const products = await readPriceListProducts(postgresPool);
+  const products = await readImportProducts(postgresPool);
   return planPriceListImport(parsed, products, decisions, file.name);
 }
 
@@ -55,6 +79,9 @@ async function defaultCategory(client: PoolClient) {
   );
   if (result.rows[0]) return result.rows[0];
   const next = await client.query<{ id: number }>("select coalesce(max(id),0)+1 as id from categories");
+  if (!Number.isInteger(next.rows[0]?.id) || next.rows[0].id <= 0 || next.rows[0].id > PRODUCT_INTEGER_MAX) {
+    throw new PriceListError("No se puede generar un ID valido para la categoria. Revisa las categorias antes de importar.");
+  }
   const category = { id: next.rows[0].id, name: "Sin categoria" };
   await client.query("insert into categories (id,name,slug,visible) values ($1,$2,'sin-categoria',true)", [category.id, category.name]);
   return category;
@@ -70,10 +97,10 @@ export async function applyExcelImport(file: File, decisions: ImportDecision[], 
     await client.query("set local lock_timeout = '10s'");
     // Read the catalog and allocate IDs under the same lock as the writes.
     await client.query("lock table brands, categories, products in share row exclusive mode");
-    const products = await readPriceListProducts(client);
+    const products = await readImportProducts(client);
     const plan = planPriceListImport(parsed, products, decisions, file.name);
     if (plan.revision !== expectedRevision) throw new PriceListError("La lista o el catalogo cambiaron. Vuelve a previsualizar antes de confirmar.", 409);
-    if (plan.errors.length || plan.unresolvedRows) throw new PriceListError("La lista tiene errores o coincidencias pendientes. Revisa la vista previa.");
+    if (!plan.createdProducts && !plan.updatedProducts) throw new PriceListError("No hay cambios validos para importar. Revisa los motivos en la vista previa.");
     const names = await ensureBrands(client, plan);
     const category = plan.createdProducts ? await defaultCategory(client) : null;
     const newIds = await allocateProductIds(client, plan.createdProducts);
@@ -114,7 +141,7 @@ export async function applyExcelImport(file: File, decisions: ImportDecision[], 
     await client.query("commit");
     return plan;
   } catch (error) {
-    await client.query("rollback");
+    await client.query("rollback").catch(() => undefined);
     throw error;
   } finally {
     client.release();

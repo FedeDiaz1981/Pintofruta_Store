@@ -4,6 +4,7 @@ import * as XLSX from "xlsx";
 import JSZip from "jszip";
 import { normalizeText } from "@/lib/catalog";
 import { normalizeWorkbookFonts } from "@/lib/excel-workbook-compat";
+import { getProductFieldErrors } from "@/lib/product-validation";
 
 export const PRICE_LIST_HEADERS = ["ID", "Nombre", "Marca", "Precio publico", "Precio logueado"] as const;
 export const MAX_PRICE_LIST_ROWS = 10000;
@@ -15,6 +16,8 @@ export type PriceListProduct = {
   brand: string;
   public_price: number;
   member_price: number;
+  validationErrors?: string[];
+  brandNeedsSync?: boolean;
 };
 
 export type PriceListRow = {
@@ -24,6 +27,8 @@ export type PriceListRow = {
   brand: string;
   publicPrice: number;
   memberPrice: number;
+  errors?: string[];
+  rawValues?: { id: string; publicPrice: string; memberPrice: string };
 };
 
 export type ImportDecision = { rowNumber: number; productId: number | "new" };
@@ -43,6 +48,7 @@ export type ExcelImportPlan = {
   updatedProducts: number;
   unchangedProducts: number;
   unresolvedRows: number;
+  skippedProducts: number;
   errors: string[];
   rows: PriceListPreviewRow[];
   revision: string;
@@ -63,24 +69,24 @@ function key(value: string) {
   return normalizeText(value).replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-function price(value: unknown) {
-  if (value == null || text(value) === "") throw new Error("Falta el precio.");
+function price(value: unknown, field: "publicPrice" | "memberPrice") {
+  const label = field === "publicPrice" ? "Precio publico" : "Precio logueado";
+  if (value == null || text(value) === "") throw new Error(`${label}: falta completar el precio.`);
   let numeric = value;
   if (typeof value === "string") {
     let raw = value.trim().replace(/ARS|\$|\s/gi, "");
-    if (!/^[\d.,]+$/.test(raw)) throw new Error("El precio no es valido.");
+    if (!/^[\d.,]+$/.test(raw)) throw new Error(`${label}: el precio no es valido.`);
     if (raw.includes(",")) {
-      if (!/^\d+(?:\.\d{3})*(?:,\d{1,2})?$/.test(raw)) throw new Error("El precio no es valido.");
+      if (!/^\d+(?:\.\d{3})*(?:,\d{1,2})?$/.test(raw)) throw new Error(`${label}: el precio no es valido.`);
       raw = raw.replace(/\./g, "").replace(",", ".");
     } else if (/^\d{1,3}(?:\.\d{3})+$/.test(raw)) {
       raw = raw.replace(/\./g, "");
-    } else if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) throw new Error("El precio no es valido.");
+    } else if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) throw new Error(`${label}: el precio no es valido.`);
     numeric = Number(raw);
   }
-  if (typeof numeric !== "number" || !Number.isInteger(numeric) || numeric < 0 || numeric > 2147483647) {
-    throw new Error("El precio debe ser un importe entero entre 0 y 2.147.483.647.");
-  }
-  return numeric;
+  const errors = getProductFieldErrors({ [field]: numeric }, [field]);
+  if (errors[field]) throw new Error(`${label}: ${errors[field]}`);
+  return Number(numeric);
 }
 
 export function parsePriceList(buffer: Buffer) {
@@ -104,21 +110,28 @@ export function parsePriceList(buffer: Buffer) {
     const cells = columns.map((c) => sheet[XLSX.utils.encode_cell({ r, c })]);
     if (cells.every((cell) => !cell || (!cell.f && cell.t !== "e" && text(cell.v) === ""))) continue;
     const rowNumber = r + 1;
-    try {
-      if (cells.some((cell) => cell?.f || cell?.t === "e")) throw new Error("No se admiten formulas ni celdas con errores.");
-      const rawId = cells[0]?.v;
-      const id = rawId == null || text(rawId) === "" ? null : Number(rawId);
-      if (id !== null && (!Number.isInteger(id) || id <= 0 || id > 2147483647 || !/^\d+$/.test(text(rawId)))) {
-        throw new Error("El ID debe ser un entero positivo o estar vacio para un producto nuevo.");
-      }
-      const name = text(cells[1]?.v);
-      const brand = text(cells[2]?.v);
-      if (!name || !brand) throw new Error("Nombre y marca son obligatorios.");
-      if (name.length > 1000 || brand.length > 200) throw new Error("El nombre o la marca superan el largo permitido.");
-      rows.push({ rowNumber, id, name, brand, publicPrice: price(cells[3]?.v), memberPrice: price(cells[4]?.v) });
-    } catch (error) {
-      errors.push(`Fila ${rowNumber}: ${error instanceof Error ? error.message : "Datos invalidos."}`);
+    const rowErrors: string[] = [];
+    if (cells.some((cell) => cell?.f || cell?.t === "e")) rowErrors.push("No se admiten formulas ni celdas con errores.");
+    const rawId = cells[0]?.v;
+    let id = rawId == null || text(rawId) === "" ? null : Number(rawId);
+    if (id !== null && (!Number.isInteger(id) || id <= 0 || id > 2147483647 || !/^\d+$/.test(text(rawId)))) {
+      rowErrors.push("El ID debe ser un entero positivo o estar vacio para un producto nuevo.");
+      id = null;
     }
+    const name = text(cells[1]?.v);
+    const brand = text(cells[2]?.v);
+    rowErrors.push(...Object.values(getProductFieldErrors({ name, brand }, ["name", "brand"])));
+    if (name.length > 1000) rowErrors.push("El nombre supera los 1000 caracteres permitidos.");
+    if (brand.length > 200) rowErrors.push("La marca supera los 200 caracteres permitidos.");
+    const prices = { publicPrice: 0, memberPrice: 0 };
+    for (const [field, column] of [["publicPrice", 3], ["memberPrice", 4]] as const) {
+      try { prices[field] = price(cells[column]?.v, field); }
+      catch (error) { rowErrors.push(error instanceof Error ? error.message : "Precio invalido."); }
+    }
+    rows.push({ rowNumber, id, name, brand, ...prices, errors: rowErrors,
+      ...(rowErrors.length ? { rawValues: { id: text(rawId), publicPrice: text(cells[3]?.v), memberPrice: text(cells[4]?.v) } } : {}),
+    });
+    errors.push(...rowErrors.map((message) => `Fila ${rowNumber}: ${message}`));
   }
   if (!rows.length && !errors.length) errors.push("La lista no contiene productos.");
   return { sheetName, rows, errors };
@@ -165,14 +178,15 @@ export function planPriceListImport(
 ): ExcelImportPlan {
   const byId = new Map(products.map((product) => [product.id, product]));
   const byRow = new Map(decisions.map((decision) => [decision.rowNumber, decision.productId]));
-  const errors = [...parsed.errors];
+  const errors = parsed.rows.length ? [] : [...parsed.errors];
   const rows: PriceListPreviewRow[] = parsed.rows.map((row) => {
     const decision = byRow.get(row.rowNumber);
-    const candidates = row.id === null
+    const candidates = row.id === null && !row.errors?.length
       ? products.map((product) => ({ ...product, score: candidateScore(row, product) }))
         .filter((product) => product.score > 0).sort((a, b) => b.score - a.score || a.id - b.id).slice(0, 6)
       : [];
-    const result: PriceListPreviewRow = { ...row, action: "create", candidates, errors: [] };
+    const result: PriceListPreviewRow = { ...row, action: "create", candidates, errors: [...(row.errors ?? [])] };
+    if (!result.errors.length) result.errors.push(...Object.values(getProductFieldErrors(row, ["name", "brand", "publicPrice", "memberPrice"])));
     if (row.id !== null && decision !== undefined) result.errors.push("Una fila con ID no admite elegir otro producto.");
     const targetId = row.id ?? (typeof decision === "number" ? decision : null);
     if (row.id === null && typeof decision === "number" && !candidates.some((item) => item.id === decision)) {
@@ -184,19 +198,20 @@ export function planPriceListImport(
       else {
         result.productId = targetId;
         result.current = current;
+        result.errors.push(...(current.validationErrors ?? []).map((error) => `Producto #${targetId}: ${error} Corregilo en administracion antes de importar.`));
         result.action = row.name === current.name && row.brand === current.brand
-          && row.publicPrice === current.public_price && row.memberPrice === current.member_price ? "unchanged" : "update";
+          && row.publicPrice === current.public_price && row.memberPrice === current.member_price && !current.brandNeedsSync ? "unchanged" : "update";
       }
     } else if (candidates.length && decision !== "new") result.action = "resolve";
     return result;
   });
   for (const decision of decisions) {
-    if (!parsed.rows.some((row) => row.rowNumber === decision.rowNumber)) errors.push(`La decision para la fila ${decision.rowNumber} no corresponde al archivo.`);
+    if (!parsed.rows.some((row) => row.rowNumber === decision.rowNumber)) throw new PriceListError(`La decision para la fila ${decision.rowNumber} no corresponde al archivo. Vuelve a previsualizar.`);
   }
   const targets = new Map<number, PriceListPreviewRow>();
   const newNames = new Map<string, PriceListPreviewRow>();
   for (const row of rows) {
-    const previous = row.productId ? targets.get(row.productId) : row.action === "create" ? newNames.get(`${key(row.brand)}|${key(row.name)}`) : undefined;
+    const previous = row.productId ? targets.get(row.productId) : row.action === "create" && !row.errors.length ? newNames.get(`${key(row.brand)}|${key(row.name)}`) : undefined;
     if (previous) {
       const message = row.productId ? `El ID ${row.productId} esta repetido en las filas ${previous.rowNumber} y ${row.rowNumber}.`
         : `Producto nuevo repetido en las filas ${previous.rowNumber} y ${row.rowNumber}.`;
@@ -204,7 +219,7 @@ export function planPriceListImport(
       row.errors.push(message);
     }
     if (row.productId) targets.set(row.productId, row);
-    else if (row.action === "create") newNames.set(`${key(row.brand)}|${key(row.name)}`, row);
+    else if (row.action === "create" && !row.errors.length) newNames.set(`${key(row.brand)}|${key(row.name)}`, row);
   }
   for (const row of rows) {
     if (row.errors.length) row.action = "error";
@@ -217,6 +232,7 @@ export function planPriceListImport(
     updatedProducts: rows.filter((row) => row.action === "update").length,
     unchangedProducts: rows.filter((row) => row.action === "unchanged").length,
     unresolvedRows: rows.filter((row) => row.action === "resolve").length,
+    skippedProducts: rows.filter((row) => row.action !== "create" && row.action !== "update").length,
   };
 }
 
@@ -252,8 +268,8 @@ export async function createPriceListWorkbook(products: PriceListProduct[]) {
   for (let column = 4; column <= 5; column += 1) {
     sheet.getColumn(column).numFmt = '#,##0';
     validations.add(`${XLSX.utils.encode_col(column - 1)}2:${XLSX.utils.encode_col(column - 1)}1048576`, {
-      type: "whole", operator: "between", formulae: [0, 2147483647], allowBlank: true,
-      showErrorMessage: true, errorTitle: "Precio invalido", error: "Ingresa un precio entero mayor o igual a cero.", errorStyle: "stop",
+      type: "whole", operator: "between", formulae: [1, 2147483647], allowBlank: true,
+      showErrorMessage: true, errorTitle: "Precio invalido", error: "Ingresa un precio entero mayor que cero.", errorStyle: "stop",
     });
   }
   sheet.autoFilter = `A1:E${Math.max(1, products.length + 1)}`;

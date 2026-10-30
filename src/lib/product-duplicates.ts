@@ -1,5 +1,6 @@
 import type { ProductItem } from "@/domain/site-content";
 import { normalizeText } from "@/lib/catalog";
+import { createProductSearch } from "@/lib/search";
 import { distance } from "fastest-levenshtein";
 
 export type DuplicateProductGroup = {
@@ -124,9 +125,8 @@ export function findDuplicateProducts(products: ProductItem[]): DuplicateProduct
 }
 
 export function filterDuplicateProducts(groups: DuplicateProductGroup[], query: string) {
-  const normalized = normalizeText(query);
-  return groups.filter((group) => !normalized || group.products.some((product) =>
-    [String(product.id), product.sku, product.name, product.brand].some((value) => normalizeText(value).includes(normalized))));
+  const matchesSearch = createProductSearch(query);
+  return groups.filter(group => group.products.some(matchesSearch));
 }
 
 export function countDuplicateProducts(groups: DuplicateProductGroup[]) {

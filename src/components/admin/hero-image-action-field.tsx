@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ProductItem } from "@/domain/site-content";
-import { normalizeText } from "@/lib/catalog";
+import { createProductSearch } from "@/lib/search";
 import { HERO_IMAGE_LINK_ERROR, resolveHeroImageHref } from "@/lib/hero-links";
 
 export function HeroImageActionField({ mode, url, productId, products, onChange }: {
@@ -17,9 +17,9 @@ export function HeroImageActionField({ mode, url, productId, products, onChange 
   const productRef = useRef<HTMLSelectElement>(null);
   const selected = products.find((product) => String(product.id) === productId);
   const available = selected?.status === "published" && !selected.soldOut;
-  const query = normalizeText(search);
+  const matchesSearch = createProductSearch(search);
   const options = products.filter((product) => String(product.id) === productId || (
-    product.status === "published" && !product.soldOut && normalizeText(`${product.id} ${product.name} ${product.brand}`).includes(query)
+    product.status === "published" && !product.soldOut && matchesSearch(product)
   ));
   const inputClass = "min-w-0 w-full max-w-full rounded-lg border border-[var(--pf-border-soft)] bg-white px-4 py-3 text-sm text-[var(--pf-text)] outline-none focus:border-[var(--pf-primary)]";
 
@@ -47,7 +47,7 @@ export function HeroImageActionField({ mode, url, productId, products, onChange 
       <label className="block text-sm font-semibold text-[var(--pf-text)]">
         Buscar producto
         <input type="search" value={search} onChange={(event) => setSearch(event.target.value)}
-          placeholder="ID, nombre o marca" className={`${inputClass} mt-2`} />
+          placeholder="ID, nombre, descripción o marca" className={`${inputClass} mt-2`} />
       </label>
       <label className="block min-w-0 text-sm font-semibold text-[var(--pf-text)]">
         Producto de la imagen

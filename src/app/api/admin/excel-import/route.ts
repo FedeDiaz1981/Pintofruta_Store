@@ -25,8 +25,14 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, action, plan, message: action === "apply" ? "Lista de precios actualizada correctamente." : "Vista previa lista." });
   } catch (error) {
     if (!(error instanceof PriceListError)) console.error("[admin-excel-import]", error);
-    return Response.json({ ok: false, error: error instanceof Error ? error.message : "No se pudo procesar el Excel." }, {
-      status: error instanceof PriceListError ? error.status : 500,
-    });
+    if (error instanceof PriceListError) return Response.json({ ok: false, error: error.message }, { status: error.status });
+    const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
+    if (["55P03", "40P01", "40001"].includes(String(code))) {
+      return Response.json({ ok: false, error: "Hay otra operacion sobre el catalogo. Espera un momento y vuelve a previsualizar la lista." }, { status: 409 });
+    }
+    if (code === "23503" || code === "23505") {
+      return Response.json({ ok: false, error: "El catalogo cambio durante la importacion. Descarga la lista actualizada y revisa la vista previa." }, { status: 409 });
+    }
+    return Response.json({ ok: false, error: "No se pudo completar la importacion. Vuelve a cargar la lista actualizada antes de reintentar." }, { status: 500 });
   }
 }

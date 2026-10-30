@@ -50,14 +50,15 @@ async function main() {
   assert.deepEqual(filter('all', 'all', 't\u00e9 verde'), [2]);
   assert.deepEqual(filter('all', 'all', 'B2'), [2]);
   assert.deepEqual(filter('all', 'all', '4'), [4]);
-  assert.deepEqual(filter('all', 'all', 'Marca A'), [1, 3]);
+  assert.deepEqual(filter('all', 'all', 'Marca A'), [1, 2, 3, 4], 'Each partial term can match anywhere, including the brand');
+  assert.deepEqual(filter('all', 'all', 'marca coco'), [1], 'Terms can be split between brand and name');
   assert.equal(isProductActive({ status: 'draft' }), false);
   for (const [visibility, query, expected] of [
     ['active', '', [2, 1, 1]],
     ['inactive', '', [2, 1, 1]],
     ['all', '', [4, 2, 2]],
     ['active', 'coco', [1, 0, 1]],
-    ['inactive', 'Marca C', [1, 0, 1]],
+    ['inactive', 'Marca C', [2, 1, 1]],
     ['all', 'sin resultados', [0, 0, 0]],
   ]) {
     const scope = filterProductAvailability(products, query, 'all', visibility);

@@ -8,12 +8,19 @@ import { siteContentSchemaSql } from "@/infrastructure/site-content/schema";
 import { normalizeText } from "@/lib/catalog";
 import { resolveCategoryIconKey } from "@/lib/category-icons";
 import { HERO_IMAGE_LINK_ERROR, resolveHeroImageHref } from "@/lib/hero-links";
+import { getProductFieldErrors, parseProductCategoryIds, PRODUCT_INTEGER_MAX, type ProductFieldErrors, type ProductSaveResult } from "@/lib/product-validation";
 import type { AdminTableKey } from "@/application/admin-crud";
 import type { PoolClient } from "pg";
 
 type PayloadRecord = Record<string, string | number | boolean | null | undefined>;
 
 const CLEAR_IMAGE_VALUE = "__pf_clear_image__";
+
+class ProductValidationError extends Error {
+  constructor(readonly errors: ProductFieldErrors, message = "Revis\u00e1 los campos marcados.") {
+    super(message);
+  }
+}
 
 function adminLog(stage: string, details: Record<string, unknown> = {}) {
   console.info(`[admin-action] ${stage}`, details);
@@ -68,54 +75,6 @@ function resolveFileValue(value: unknown, existingValue: string | null = null) {
 
 function slugify(value: string) {
   return normalizeText(value).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-}
-
-function parseNumberArray(value: unknown) {
-  if (Array.isArray(value)) {
-    return value.map((item) => toNumber(item)).filter((item) => Number.isFinite(item) && item > 0);
-  }
-
-  if (typeof value === "string" && value.trim()) {
-    try {
-      const parsed = JSON.parse(value) as unknown;
-      if (Array.isArray(parsed)) {
-        return parsed.map((item) => toNumber(item)).filter((item) => Number.isFinite(item) && item > 0);
-      }
-    } catch {
-      return value
-        .split(",")
-        .map((item) => toNumber(item.trim()))
-        .filter((item) => Number.isFinite(item) && item > 0);
-    }
-  }
-
-  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-    return [value];
-  }
-
-  return [];
-}
-
-function parseStringArray(value: unknown) {
-  if (Array.isArray(value)) {
-    return value.map((item) => toStringValue(item)).filter(Boolean);
-  }
-
-  if (typeof value === "string" && value.trim()) {
-    try {
-      const parsed = JSON.parse(value) as unknown;
-      if (Array.isArray(parsed)) {
-        return parsed.map((item) => toStringValue(item)).filter(Boolean);
-      }
-    } catch {
-      return value
-        .split(",")
-        .map((item) => toStringValue(item))
-        .filter(Boolean);
-    }
-  }
-
-  return [];
 }
 
 function parseTemplateRowMap(value: unknown) {
@@ -188,7 +147,8 @@ function getJsonPayload(formData: FormData): PayloadRecord {
   }
 
   try {
-    return JSON.parse(raw) as PayloadRecord;
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as PayloadRecord : {};
   } catch {
     return {};
   }
@@ -224,7 +184,12 @@ async function resolveTextId(table: string, providedId: string, fallbackParts: s
 }
 
 async function saveProduct(record: PayloadRecord) {
+  const errors = getProductFieldErrors(record);
+  if (Object.keys(errors).length > 0) throw new ProductValidationError(errors);
   const providedId = record.id == null || record.id === "" ? 0 : toNumber(record.id);
+  if (record.id != null && record.id !== "" && (!Number.isInteger(providedId) || providedId <= 0 || providedId > PRODUCT_INTEGER_MAX)) {
+    throw new ProductValidationError({}, "El ID del producto no es v\u00e1lido. Volv\u00e9 a abrir el formulario.");
+  }
   const existingResult = providedId
     ? await postgresPool!.query<{
         sku: string;
@@ -248,38 +213,37 @@ async function saveProduct(record: PayloadRecord) {
         `select sku, presentation, category_id, category_name, category_ids, category_names, status, sold_out, image,
                 featured_priority, stock, views_count, sales_count, description, source_section, template_row_map
          from products
-         where id = $1
+         where id = $1 and deleted_at is null
          limit 1`,
         [providedId],
       )
     : null;
   const existing = existingResult?.rows[0];
-  const id = providedId || (await nextNumericId("products"));
-
-  const selectedCategoryIds = parseNumberArray(record.categoryIds);
-  const existingCategoryIds = parseNumberArray(existing?.category_ids);
-  const existingCategoryNames = parseStringArray(existing?.category_names);
-  const fallbackCategoryIds = existingCategoryIds.length > 0 ? existingCategoryIds : existing?.category_id ? [existing.category_id] : [];
-  const categoryIds = selectedCategoryIds.length > 0 ? selectedCategoryIds : fallbackCategoryIds;
-
-  if (categoryIds.length === 0) {
-    throw new Error("El producto necesita al menos una categoría.");
+  if (providedId && !existing) {
+    throw new ProductValidationError({}, "El producto ya no existe. Cerr\u00e1 el formulario y actualiz\u00e1 el listado.");
   }
+  const categoryIds = parseProductCategoryIds(record.categoryIds)!;
 
   const categoryResult = await postgresPool!.query<{ id: number; name: string }>(
     `select id, name from categories where id = any($1::int[]) and deleted_at is null order by id`,
     [categoryIds],
   );
   const categoryMap = new Map(categoryResult.rows.map((row) => [row.id, row.name]));
-  const resolvedCategoryNames = categoryIds
-    .map((categoryId) => categoryMap.get(categoryId))
-    .filter((value): value is string => Boolean(value));
-  const categoryNames = resolvedCategoryNames.length > 0 ? resolvedCategoryNames : existingCategoryNames.length > 0 ? existingCategoryNames : [existing?.category_name || ""];
+  if (categoryIds.some((categoryId) => !categoryMap.has(categoryId))) {
+    throw new ProductValidationError({ categoryIds: "Una categor\u00eda seleccionada ya no existe. Volv\u00e9 a seleccionarla." });
+  }
+  const categoryNames = categoryIds.map((categoryId) => categoryMap.get(categoryId)!);
+  const brand = toStringValue(record.brand);
+  const brandResult = await postgresPool!.query("select name from brands where name = $1 limit 1", [brand]);
+  if (brandResult.rows.length === 0) {
+    throw new ProductValidationError({ brand: "La marca seleccionada ya no existe. Eleg\u00ed una marca registrada." });
+  }
+  const id = providedId || (await nextNumericId("products"));
   const primaryCategoryId = categoryIds[0];
-  const primaryCategoryName = categoryNames[0] || existing?.category_name || "";
+  const primaryCategoryName = categoryNames[0];
   const sku = toStringValue(record.sku) || existing?.sku || generateSku(id);
   const name = toStringValue(record.name);
-  const detail = toStringValue(record.detail) || name || sku;
+  const detail = toStringValue(record.detail);
   const presentation = toStringValue(record.presentation) || existing?.presentation || "";
   const active =
     record.active == null || record.active === ""
@@ -354,7 +318,7 @@ async function saveProduct(record: PayloadRecord) {
       primaryCategoryName,
       JSON.stringify(categoryIds),
       JSON.stringify(categoryNames),
-      toStringValue(record.brand),
+      brand,
       toBoolean(record.vegano),
       toBoolean(record.kosher),
       record.testeadoEnAnimales == null ? null : toBoolean(record.testeadoEnAnimales),
@@ -1077,9 +1041,8 @@ function refreshAdminViews() {
   revalidatePath("/producto/[sku]", "page");
 }
 
-export async function saveAdminRecord(formData: FormData) {
+export async function saveAdminRecord(formData: FormData): Promise<ProductSaveResult | void> {
   await requireAdminViewer();
-  await ensureDatabase();
 
   const table = String(formData.get("table") || "") as AdminTableKey;
   const payload = getJsonPayload(formData);
@@ -1088,6 +1051,25 @@ export async function saveAdminRecord(formData: FormData) {
     throw new Error("Falta la tabla.");
   }
 
+  if (table === "products") {
+    const errors = getProductFieldErrors(payload);
+    if (Object.keys(errors).length > 0) return { ok: false, errors };
+    try {
+      await ensureDatabase();
+      await saveProduct(payload);
+    } catch (error) {
+      if (error instanceof ProductValidationError) return { ok: false, errors: error.errors, message: error.message };
+      const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
+      if (code === "23503") return { ok: false, errors: { categoryIds: "Una categor\u00eda dej\u00f3 de estar disponible. Actualiz\u00e1 la selecci\u00f3n." } };
+      if (code === "23505") return { ok: false, errors: {}, message: "Ya existe un producto con ese c\u00f3digo. Volv\u00e9 a abrir el formulario." };
+      adminLog("save-product-failed", { code: typeof code === "string" ? code : "unknown" });
+      return { ok: false, errors: {}, message: "No se pudo guardar el producto. Tus datos siguen en el formulario; intent\u00e1 nuevamente." };
+    }
+    refreshAdminViews();
+    return { ok: true };
+  }
+
+  await ensureDatabase();
   await saveRow(table, payload);
   refreshAdminViews();
 }

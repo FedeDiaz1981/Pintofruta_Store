@@ -12,6 +12,7 @@ import type {
   ProductItem,
 } from "@/domain/site-content";
 import { normalizeText } from "@/lib/catalog";
+import { createProductSearch, createTextSearch, productSearchValues } from "@/lib/search";
 
 export interface DynamicMenuItem {
   label: string;
@@ -168,7 +169,7 @@ const getActiveBannerRows = cache(async () => {
 });
 
 function filterCatalogProducts(products: ProductItem[], filters: CatalogFilters = {}) {
-  const query = normalizeText(filters.query);
+  const matchesSearch = createProductSearch(filters.query);
   const brand = normalizeText(filters.brand);
   const category = normalizeText(filters.category);
 
@@ -177,14 +178,7 @@ function filterCatalogProducts(products: ProductItem[], filters: CatalogFilters 
       return false;
     }
 
-    const matchesQuery =
-      !query ||
-      normalizeText(item.name).includes(query) ||
-      normalizeText(item.detail).includes(query) ||
-      normalizeText(item.brand).includes(query) ||
-      normalizeText(item.categoryName).includes(query) ||
-      (item.categoryNames ?? []).some((categoryName) => normalizeText(categoryName).includes(query)) ||
-      normalizeText(item.sku).includes(query);
+    const matchesQuery = matchesSearch(item);
     const matchesBrand = !brand || normalizeText(item.brand).includes(brand);
     const matchesCategory =
       !category ||
@@ -196,29 +190,15 @@ function filterCatalogProducts(products: ProductItem[], filters: CatalogFilters 
 }
 
 function filterCatalogPacks(packs: PackItem[], query = "") {
-  const normalizedQuery = normalizeText(query);
+  const matchesSearch = createTextSearch(query);
 
   return packs.filter((item) => {
     if (!item.active || item.items.length === 0) {
       return false;
     }
 
-    if (!normalizedQuery) {
-      return true;
-    }
-
-    return (
-      normalizeText(item.title).includes(normalizedQuery) ||
-      normalizeText(item.description).includes(normalizedQuery) ||
-      normalizeText(item.category).includes(normalizedQuery) ||
-      normalizeText(item.apodo).includes(normalizedQuery) ||
-      item.items.some((selected) =>
-        normalizeText(selected.product.name).includes(normalizedQuery) ||
-        normalizeText(selected.product.brand).includes(normalizedQuery) ||
-        normalizeText(selected.product.categoryName).includes(normalizedQuery) ||
-        (selected.product.categoryNames ?? []).some((categoryName) => normalizeText(categoryName).includes(normalizedQuery)),
-      )
-    );
+    return matchesSearch([item.title, item.description, item.category, item.apodo,
+      item.items.map(selected => productSearchValues(selected.product))]);
   });
 }
 

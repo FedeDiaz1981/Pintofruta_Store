@@ -1,15 +1,6 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const ts = require('typescript');
-
-function load(file) {
-  const output = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  }).outputText;
-  const result = { exports: {} };
-  new Function('require', 'exports', output)(id => id === '@/lib/catalog' ? load('src/lib/catalog.ts') : require(id), result.exports);
-  return result.exports;
-}
+const {modules} = require('./test-hero-links.cjs');
+const load = modules();
 
 const { findDuplicateProducts, filterDuplicateProducts, countDuplicateProducts } = load('src/lib/product-duplicates.ts');
 const product = (id, name, brand, status = 'published') => ({ id, name, brand, status, sku: `SKU${id}` });

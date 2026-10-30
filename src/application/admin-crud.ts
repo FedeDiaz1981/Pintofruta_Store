@@ -239,7 +239,7 @@ export function getAdminTableDefinitions(content: SiteContentDocument): AdminTab
         textField("sku", "SKU", true, "Uso interno", true, true),
         textField("name", "Nombre", true),
         textareaField("detail", "Detalle", true),
-        multiselectField("categoryIds", "Categorías", visibleCategoryOptions, "Elegí una o más categorías visibles."),
+        { ...multiselectField("categoryIds", "Categorías", visibleCategoryOptions, "Elegí una o más categorías visibles."), required: true },
         selectField("brand", "Marca", brandOptions, true, "Elegí una marca registrada."),
         numberField("publicPrice", "Precio público", true),
         numberField("memberPrice", "Precio miembro", true),

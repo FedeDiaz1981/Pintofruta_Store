@@ -72,8 +72,8 @@ export function ProductAvailabilityManager({ products, onClose, onProductChange 
     </header>
     <div className={styles.filters}>
       <div className={styles.searchRow}>
-        <label className={styles.search}><Search size={18} aria-hidden="true" /><span className="sr-only">Buscar productos por ID, nombre o marca</span>
-          <input type="search" placeholder="ID, nombre o marca" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} />
+        <label className={styles.search}><Search size={18} aria-hidden="true" /><span className="sr-only">Buscar productos por ID, nombre, descripción o marca</span>
+          <input type="search" placeholder="ID, nombre, descripción o marca" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} />
         </label>
         <label className={styles.visibility}><span>Visibilidad</span><select aria-label="Visibilidad" value={visibility} onChange={(event) => { setVisibility(event.target.value as VisibilityFilter); setPage(1); }}>
           <option value="all">Todos los estados</option><option value="active">Activos</option><option value="inactive">Inactivos</option>

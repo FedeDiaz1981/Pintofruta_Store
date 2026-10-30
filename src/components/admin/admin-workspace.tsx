@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ArrowUpRight, PackageX, Plus, Search, Trash2 } from "lucide-react";
 import styles from "./admin-workspace.module.css";
 import { deleteAdminRecord, deleteAdminRecords, saveAdminRecord, setProductSoldOut } from "@/app/admin/actions";
 import { ExcelImportButton } from "@/components/admin/excel-import-button";
 import { PriceListDownloadButton } from "@/components/admin/price-list-download-button";
+import { CustomerOrderDownloadButton } from "@/components/admin/customer-order-download-button";
 import { ProductImageManager } from "@/components/admin/product-image-manager";
 import { ProductAvailabilityManager } from "@/components/admin/product-availability-manager";
 import { ProductDuplicatesManager } from "@/components/admin/product-duplicates-manager";
@@ -20,8 +21,10 @@ import type {
 } from "@/application/admin-crud";
 import type { ProductItem } from "@/domain/site-content";
 import { formatCurrency } from "@/lib/catalog";
+import { createProductSearch, createTextSearch } from "@/lib/search";
 import { getTemplateRowMapKey } from "@/lib/order-template-row-map-key";
 import { countDuplicateProducts, findDuplicateProducts } from "@/lib/product-duplicates";
+import { getProductFieldErrors, PRODUCT_INTEGER_MAX, type ProductFieldErrors, type ProductValidationField } from "@/lib/product-validation";
 
 type DraftRecord = Record<string, string | number | boolean | null>;
 
@@ -35,7 +38,7 @@ type TemplateRowMap = Record<string, number>;
 
 type CatalogProductRow = Pick<
   ProductItem,
-  "id" | "sku" | "name" | "brand" | "categoryName" | "categoryNames" | "publicPrice" | "image" | "stock"
+  "id" | "sku" | "name" | "detail" | "description" | "presentation" | "brand" | "categoryName" | "categoryNames" | "publicPrice" | "image" | "stock"
 >;
 
 type EditorState = {
@@ -60,6 +63,10 @@ type UploadState = {
 
 const CLEAR_IMAGE_VALUE = "__pf_clear_image__";
 const ADMIN_PAGE_SIZE = 50;
+
+function ProductFieldError({ field, message }: { field: string; message?: string }) {
+  return message ? <p id={`admin-product-${field}-error`} className="mt-2 text-sm text-red-700">{message}</p> : null;
+}
 
 const sidebarSections: { title: string; keys: AdminTableKey[] }[] = [
   { title: "Configuración", keys: ["site_content_meta"] },
@@ -493,17 +500,7 @@ function PackProductsField({
 }) {
   const selections = parsePackSelections(value);
   const selectedIds = new Set(selections.map((item) => item.productId));
-  const normalizedSearch = search.trim().toLowerCase();
-
-  const filteredProducts = products.filter((product) => {
-    if (!normalizedSearch) {
-      return true;
-    }
-
-    return [product.name, product.sku, product.brand, product.categoryName, ...(product.categoryNames ?? [])]
-      .filter(Boolean)
-      .some((entry) => String(entry).toLowerCase().includes(normalizedSearch));
-  });
+  const filteredProducts = products.filter(createProductSearch(search));
 
   const updateSelections = (nextSelections: PackSelection[]) => {
     onChange(serializePackSelections(nextSelections));
@@ -546,7 +543,7 @@ function PackProductsField({
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             className="ml-3 flex-1 bg-transparent text-sm text-[var(--pf-text)] outline-none placeholder:text-[var(--pf-muted)]"
-            placeholder="SKU, nombre, marca o categoría"
+            placeholder="Nombre, descripción, marca o SKU"
           />
         </label>
 
@@ -668,6 +665,16 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   const [duplicatesManagerOpen, setDuplicatesManagerOpen] = useState(false);
   const [deletedDuplicateIds, setDeletedDuplicateIds] = useState<number[]>([]);
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const [, submitEditor, isSaving] = useActionState(async (_state: null, data: FormData) => {
+    await handleSave(data);
+    return null;
+  }, null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [productServerErrors, setProductServerErrors] = useState<ProductFieldErrors>({});
+  const [productTouched, setProductTouched] = useState<Partial<Record<ProductValidationField, boolean>>>({});
+  const savingRef = useRef(false);
+  const productErrors = editor?.tableKey === "products" ? getProductFieldErrors(editor.draft) : {};
+  const productInvalid = Object.keys(productErrors).length > 0;
   const [bulkDeleteState, setBulkDeleteState] = useState<BulkDeleteState | null>(null);
   const [soldOutOverrides, setSoldOutOverrides] = useState<Record<string, boolean>>({});
   const selectAllRef = useRef<HTMLInputElement | null>(null);
@@ -695,13 +702,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   const tableMinWidthClass = selectedTable.key === "products" ? "min-w-[620px]" : "min-w-[960px]";
 
   const filteredRows = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-
-    const queryFilteredRows = !normalized
-      ? selectedRows
-      : selectedRows.filter((row) =>
-          Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(normalized)),
-        );
+    const queryFilteredRows = selectedRows.filter(createTextSearch(query));
 
     return queryFilteredRows.filter((row) => {
       if (!isVisibleAdminRow(selectedTable.key, row)) return false;
@@ -747,8 +748,33 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   }, [totalPages]);
 
   async function handleSave(formData: FormData) {
-    await saveAdminRecord(formData);
-    setEditor(null);
+    if (savingRef.current || hasPendingUploads) return;
+    if (productInvalid) {
+      setProductServerErrors(productErrors);
+      setSaveError("Revis\u00e1 los campos marcados.");
+      return;
+    }
+    savingRef.current = true;
+    setSaveError(null);
+    try {
+      const result = await saveAdminRecord(formData);
+      if (result && !result.ok) {
+        setProductServerErrors(result.errors);
+        setSaveError(result.message || "Revis\u00e1 los campos marcados.");
+        return;
+      }
+      setEditor(null);
+    } catch {
+      setSaveError("No se pudo guardar. Los datos siguen en el formulario; intent\u00e1 nuevamente.");
+    } finally {
+      savingRef.current = false;
+    }
+  }
+
+  function resetEditorFeedback() {
+    setSaveError(null);
+    setProductServerErrors({});
+    setProductTouched({});
   }
 
   async function handleBulkDelete() {
@@ -846,6 +872,8 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   }
 
   function openNew(table: AdminTableDefinition) {
+    if (savingRef.current) return;
+    resetEditorFeedback();
     setSelectedTableKey(table.key);
     setSelectedRowId("");
     setSelectedRowIds([]);
@@ -861,6 +889,8 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   }
 
   function openEdit(table: AdminTableDefinition, row: Record<string, unknown>) {
+    if (savingRef.current) return;
+    resetEditorFeedback();
     const rowId = getRowId(table, row);
 
     setSelectedTableKey(table.key);
@@ -877,6 +907,8 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   }
 
   function closeEditor() {
+    if (savingRef.current) return;
+    resetEditorFeedback();
     setFileNames({});
     setUploadStates({});
     setEditor(null);
@@ -927,6 +959,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                           key={table.key}
                           type="button"
                           onClick={() => {
+                            if (savingRef.current) return;
                             setSelectedTableKey(table.key);
                             setSelectedRowId("");
                             setSelectedRowIds([]);
@@ -1045,6 +1078,8 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
 
                   {selectedTable.key === "products" ? <PriceListDownloadButton className={styles.action} /> : null}
 
+                  {selectedTable.key === "products" ? <CustomerOrderDownloadButton className={styles.action} /> : null}
+
                   <button
                     type="button"
                     onClick={() => {
@@ -1082,7 +1117,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                     type="search"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder={selectedTable.key === "products" ? "Buscar por ID, nombre o marca" : "Buscar por SKU, nombre, email o estado"}
+                    placeholder={selectedTable.key === "products" ? "Buscar por ID, nombre, descripción o marca" : "Buscar por SKU, nombre, email o estado"}
                   />
                 </label>
                 {selectedTable.key === "products" ? (
@@ -1429,31 +1464,52 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
               <button
                 type="button"
                 onClick={closeEditor}
+                disabled={isSaving}
                 className="rounded-full border border-[var(--pf-border-soft)] bg-white px-4 py-2 text-sm font-semibold text-[var(--pf-primary-darker)] transition hover:bg-[rgba(248,242,232,0.6)]"
               >
                 Cerrar
               </button>
             </div>
 
+            {/* Action resets must not clear the controlled draft after validation errors. */}
             <form
-              action={handleSave}
+              action={submitEditor}
+              onReset={(event) => event.preventDefault()}
               onSubmit={(event) => {
-                if (hasPendingUploads) {
+                if (hasPendingUploads || savingRef.current || productInvalid) {
                   event.preventDefault();
+                  if (productInvalid) {
+                    setProductServerErrors(productErrors);
+                    setSaveError("Revis\u00e1 los campos marcados.");
+                  }
                 }
+              }}
+              onChangeCapture={() => {
+                setProductServerErrors({});
+                setSaveError(null);
+              }}
+              onBlurCapture={(event) => {
+                const field = event.target.closest<HTMLElement>("[data-product-field]")?.dataset.productField as ProductValidationField | undefined;
+                if (field) setProductTouched((current) => ({ ...current, [field]: true }));
               }}
               className="min-h-0 flex-1 overflow-y-auto px-6 py-6 pb-12"
             >
               <input type="hidden" name="table" value={editor.tableKey} />
               <input type="hidden" name="payload_json" value={stringifyDraft(editor.draft)} />
 
-              <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+              <fieldset disabled={isSaving} className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
                 {selectedTable.fields.map((field) => {
                   if (field.hidden || field.readonly) {
                     return null;
                   }
 
                   const value = editor.draft[field.key];
+                  const productField = field.key as ProductValidationField;
+                  const productRequired = selectedTable.key === "products" && Boolean(field.required);
+                  const fieldError = selectedTable.key === "products"
+                    ? productServerErrors[productField] || (productTouched[productField] ? productErrors[productField] : undefined)
+                    : undefined;
+                  const errorId = fieldError ? `admin-product-${field.key}-error` : undefined;
                   if (field.kind === "hero_image_action") {
                     return (
                       <HeroImageActionField
@@ -1515,10 +1571,13 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                     const options = field.options ?? [];
 
                     return (
-                      <div key={field.key} className={`block ${fullWidth ? "md:col-span-2" : ""}`}>
+                      <div key={field.key} data-product-field={selectedTable.key === "products" ? field.key : undefined}
+                        role="group" aria-labelledby={`admin-field-${field.key}`} aria-describedby={errorId}
+                        className={`block ${fullWidth ? "md:col-span-2" : ""}`}>
                         <div className="mb-2 flex items-center justify-between gap-3">
-                          <span className="text-[11px] font-black uppercase tracking-[0.28em] text-[var(--pf-muted)]">
+                          <span id={`admin-field-${field.key}`} className="text-[11px] font-black uppercase tracking-[0.28em] text-[var(--pf-muted)]">
                             {field.label}
+                            {productRequired ? <span aria-hidden="true" className="ml-1 text-red-700">*</span> : null}
                           </span>
                           {field.helper ? <span className="text-xs text-[var(--pf-muted)]">{field.helper}</span> : null}
                         </div>
@@ -1615,6 +1674,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                             </div>
                           </div>
                         )}
+                        <ProductFieldError field={field.key} message={fieldError} />
                       </div>
                     );
                   }
@@ -1656,14 +1716,19 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                     const options = field.options ?? [];
 
                     return (
-                      <label key={field.key} className={`block ${fullWidth ? "md:col-span-2" : ""}`}>
+                      <label key={field.key} data-product-field={selectedTable.key === "products" ? field.key : undefined} className={`block ${fullWidth ? "md:col-span-2" : ""}`}>
                         <div className="mb-2 flex items-center justify-between gap-3">
                           <span className="text-[11px] font-black uppercase tracking-[0.28em] text-[var(--pf-muted)]">
                             {field.label}
+                            {productRequired ? <span aria-hidden="true" className="ml-1 text-red-700">*</span> : null}
                           </span>
                           {field.helper ? <span className="text-xs text-[var(--pf-muted)]">{field.helper}</span> : null}
                         </div>
                         <select
+                          required={productRequired}
+                          aria-label={selectedTable.key === "products" ? field.label : undefined}
+                          aria-invalid={Boolean(fieldError)}
+                          aria-describedby={errorId}
                           value={String(value ?? "")}
                           onChange={(event) =>
                             setEditor((current) =>
@@ -1675,7 +1740,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                                 : current,
                             )
                           }
-                          className="w-full rounded-[22px] border border-[var(--pf-border-soft)] bg-white px-4 py-3 text-sm text-[var(--pf-text)] outline-none transition focus:border-[var(--pf-primary)]"
+                          className="w-full rounded-[22px] border border-[var(--pf-border-soft)] bg-white px-4 py-3 text-sm text-[var(--pf-text)] outline-none transition focus:border-[var(--pf-primary)] aria-[invalid=true]:border-red-600"
                         >
                           <option value="">Seleccionar...</option>
                           {options.map((option) => (
@@ -1684,20 +1749,26 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                             </option>
                           ))}
                         </select>
+                        <ProductFieldError field={field.key} message={fieldError} />
                       </label>
                     );
                   }
 
                   if (field.kind === "textarea") {
                     return (
-                      <label key={field.key} className={`block ${fullWidth ? "md:col-span-2" : ""}`}>
+                      <label key={field.key} data-product-field={selectedTable.key === "products" ? field.key : undefined} className={`block ${fullWidth ? "md:col-span-2" : ""}`}>
                         <div className="mb-2 flex items-center justify-between gap-3">
                           <span className="text-[11px] font-black uppercase tracking-[0.28em] text-[var(--pf-muted)]">
                             {field.label}
+                            {productRequired ? <span aria-hidden="true" className="ml-1 text-red-700">*</span> : null}
                           </span>
                           {field.helper ? <span className="text-xs text-[var(--pf-muted)]">{field.helper}</span> : null}
                         </div>
                         <textarea
+                          required={productRequired}
+                          aria-label={selectedTable.key === "products" ? field.label : undefined}
+                          aria-invalid={Boolean(fieldError)}
+                          aria-describedby={errorId}
                           value={String(value ?? "")}
                           onChange={(event) =>
                             setEditor((current) =>
@@ -1710,9 +1781,10 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                             )
                           }
                           rows={5}
-                          className="w-full rounded-[22px] border border-[var(--pf-border-soft)] bg-white px-4 py-3 text-sm text-[var(--pf-text)] outline-none transition placeholder:text-[var(--pf-muted)] focus:border-[var(--pf-primary)]"
+                          className="w-full rounded-[22px] border border-[var(--pf-border-soft)] bg-white px-4 py-3 text-sm text-[var(--pf-text)] outline-none transition placeholder:text-[var(--pf-muted)] focus:border-[var(--pf-primary)] aria-[invalid=true]:border-red-600"
                           readOnly={field.readonly}
                         />
+                        <ProductFieldError field={field.key} message={fieldError} />
                       </label>
                     );
                   }
@@ -2077,14 +2149,22 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                   }
 
                   return (
-                    <label key={field.key} className={`block ${fullWidth ? "md:col-span-2" : ""}`}>
+                    <label key={field.key} data-product-field={selectedTable.key === "products" ? field.key : undefined} className={`block ${fullWidth ? "md:col-span-2" : ""}`}>
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <span className="text-[11px] font-black uppercase tracking-[0.28em] text-[var(--pf-muted)]">
                           {field.label}
+                          {productRequired ? <span aria-hidden="true" className="ml-1 text-red-700">*</span> : null}
                         </span>
                         {field.helper ? <span className="text-xs text-[var(--pf-muted)]">{field.helper}</span> : null}
                       </div>
                       <input
+                        required={productRequired}
+                        aria-label={selectedTable.key === "products" ? field.label : undefined}
+                        aria-invalid={Boolean(fieldError)}
+                        aria-describedby={errorId}
+                        min={selectedTable.key === "products" && ["publicPrice", "memberPrice"].includes(field.key) ? 1 : undefined}
+                        max={selectedTable.key === "products" && ["publicPrice", "memberPrice", "featuredPriority"].includes(field.key) ? PRODUCT_INTEGER_MAX : undefined}
+                        step={selectedTable.key === "products" && field.kind === "number" ? 1 : undefined}
                         type={field.kind === "number" ? "number" : "text"}
                         value={value == null ? "" : String(value)}
                         onChange={(event) =>
@@ -2100,7 +2180,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                               : current,
                           )
                         }
-                        className={`w-full rounded-[22px] border px-4 py-3 text-sm outline-none transition placeholder:text-[var(--pf-muted)] focus:border-[var(--pf-primary)] ${
+                        className={`w-full rounded-[22px] border px-4 py-3 text-sm outline-none transition placeholder:text-[var(--pf-muted)] focus:border-[var(--pf-primary)] aria-[invalid=true]:border-red-600 ${
                           field.readonly
                             ? "border-[var(--pf-border-soft)] bg-[rgba(248,242,232,0.6)] text-[var(--pf-muted)]"
                             : "border-[var(--pf-border-soft)] bg-white text-[var(--pf-text)]"
@@ -2108,22 +2188,28 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                         readOnly={field.readonly}
                         disabled={field.readonly}
                       />
+                      <ProductFieldError field={field.key} message={fieldError} />
                     </label>
                   );
                 })}
-              </div>
+              </fieldset>
+
+              {saveError ? <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{saveError}</p> : null}
 
               <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-[var(--pf-border-soft)] pt-5">
                 <button
                   type="submit"
-                  disabled={hasPendingUploads}
-                  className="rounded-full bg-[linear-gradient(180deg,var(--pf-primary-soft)_0%,var(--pf-primary)_100%)] px-6 py-3 text-sm font-black text-white shadow-[0_14px_30px_rgba(168,109,69,0.22)] transition hover:brightness-105"
+                  disabled={hasPendingUploads || isSaving || productInvalid}
+                  title={productInvalid ? "Complet\u00e1 los campos obligatorios." : undefined}
+                  className="rounded-full bg-[linear-gradient(180deg,var(--pf-primary-soft)_0%,var(--pf-primary)_100%)] px-6 py-3 text-sm font-black text-white shadow-[0_14px_30px_rgba(168,109,69,0.22)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Guardar
+                  {isSaving ? "Guardando..." : "Guardar"}
                 </button>
                 <button
                   type="button"
+                  disabled={isSaving}
                   onClick={() => {
+                    resetEditorFeedback();
                     setSelectedRowId("");
                     setEditor((current) =>
                       current
@@ -2142,6 +2228,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                 <button
                   type="button"
                   onClick={closeEditor}
+                  disabled={isSaving}
                   className="rounded-full border border-transparent px-4 py-3 text-sm font-semibold text-[var(--pf-muted)] transition hover:text-[var(--pf-primary-darker)]"
                 >
                   Cancelar

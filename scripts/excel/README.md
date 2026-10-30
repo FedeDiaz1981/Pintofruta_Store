@@ -30,3 +30,27 @@ regresion y `REMITO_TEST_OUTPUT_DIR` permite guardar los archivos de prueba.
 El generador verifica el codigo con un lector VBA independiente antes de escribir
 `src/lib/remito-vba-project.ts`. Ese modulo generado se incluye en el bundle de
 Next.js; el despliegue no requiere Python ni Microsoft Office.
+
+## Planilla de pedidos del catalogo
+
+La descarga de Administracion > Productos genera un `.xlsm` con `PEDIDO CLIENTE`
+y `REMITO`. Cada X del remito limpia la cantidad de la fila original de
+`PEDIDO CLIENTE` y recalcula las dos hojas. El remito se compacta conservando sus
+formulas, por lo que el producto puede volver a seleccionarse desde la lista.
+La correspondencia usa posiciones de origen, incluso si hay nombres repetidos.
+El total usa `SUM` sobre todos los importes. No se usa `SUBTOTAL` dentro de las
+formulas condicionales de los importes porque Excel las excluye al sumar otros
+subtotales. Los eventos de apertura, cambio de cantidades/datos y eliminacion
+recalculan las dos hojas, tambien si Excel estaba en modo de calculo manual.
+
+La macro propia esta en `CustomerOrderWorkbook.cls`. Para regenerarla:
+
+`python scripts/build-remito-vba.py --customer-order`
+
+El resultado es `src/lib/customer-order-vba-project.ts`, con los modulos de
+`ThisWorkbook`, `Sheet1` y `Sheet2`. La macro del remito enviado por correo es
+independiente y conserva su implementacion existente.
+
+`npm run test:customer-order` verifica formulas, las acciones, los enlaces y el
+empaquetado. Para probar el evento real de clic se requiere Excel de escritorio
+con macros habilitadas; Google Sheets y Excel web no ejecutan VBA.

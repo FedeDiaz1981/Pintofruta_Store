@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Image from "next/image";
 import { saveProductImage } from "@/app/admin/actions";
 import type { ProductItem } from "@/domain/site-content";
+import { createProductSearch } from "@/lib/search";
 
 type ProductImageManagerProps = {
   products: ProductItem[];
@@ -63,7 +64,7 @@ export function ProductImageManager({ products, onClose }: ProductImageManagerPr
   const [statuses, setStatuses] = useState<Record<number, ProductStatus>>({});
 
   const filteredProducts = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+    const matchesSearch = createProductSearch(query);
 
     return localProducts.filter((product) => {
       const hasImage = Boolean(product.image?.trim());
@@ -71,11 +72,7 @@ export function ProductImageManager({ products, onClose }: ProductImageManagerPr
         imageFilter === "all" ||
         (imageFilter === "missing" && !hasImage) ||
         (imageFilter === "with-image" && hasImage);
-      const matchesQuery =
-        !normalizedQuery ||
-        [product.sku, product.name, product.brand, product.categoryName]
-          .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+      const matchesQuery = matchesSearch(product);
 
       return matchesImageFilter && matchesQuery;
     });
@@ -183,7 +180,7 @@ export function ProductImageManager({ products, onClose }: ProductImageManagerPr
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             className="ml-3 flex-1 bg-transparent text-sm text-[var(--pf-text)] outline-none placeholder:text-[var(--pf-muted)]"
-            placeholder="SKU, producto, marca o categoria"
+            placeholder="ID, nombre, descripción o marca"
           />
         </label>
 
