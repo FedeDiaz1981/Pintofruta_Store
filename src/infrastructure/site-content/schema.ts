@@ -202,4 +202,20 @@ export const siteContentSchemaSql = `
 
   alter table order_excel_templates add column if not exists created_at timestamptz not null default now();
   alter table order_excel_templates add column if not exists updated_at timestamptz not null default now();
+
+  create table if not exists excel_sync_tokens (
+    id text primary key,
+    label text not null,
+    token_hash text not null unique,
+    scopes jsonb not null default '["catalog:read","catalog:write"]'::jsonb,
+    active boolean not null default true,
+    expires_at timestamptz,
+    created_by integer references users(id) on delete set null,
+    created_at timestamptz not null default now(),
+    last_used_at timestamptz,
+    last_used_ip text
+  );
+
+  create index if not exists excel_sync_tokens_active_idx on excel_sync_tokens (active);
+  create index if not exists excel_sync_tokens_expires_idx on excel_sync_tokens (expires_at);
 `; 

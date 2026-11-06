@@ -12,6 +12,7 @@ import { CustomerOrderDownloadButton } from "@/components/admin/customer-order-d
 import { ProductImageManager } from "@/components/admin/product-image-manager";
 import { ProductAvailabilityManager } from "@/components/admin/product-availability-manager";
 import { ProductDuplicatesManager } from "@/components/admin/product-duplicates-manager";
+import { ExcelSyncTokenButton } from "@/components/admin/excel-sync-token-button";
 import { HeroImageActionField } from "@/components/admin/hero-image-action-field";
 import type {
   AdminCrudViewModel,
@@ -1019,6 +1020,8 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
             <span className="block text-sm font-semibold">Productos duplicados</span>
             <span className={styles.duplicateCount} aria-hidden="true">{duplicateCount}</span>
           </button>
+
+          <ExcelSyncTokenButton />
 
         </aside>
 
