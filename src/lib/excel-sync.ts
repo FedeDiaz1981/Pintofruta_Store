@@ -3,6 +3,8 @@ import "server-only";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { postgresPool } from "@/infrastructure/db/postgres";
+import { allocateProductIds } from "@/infrastructure/db/product-ids";
+import { storeImageOnSupabase } from "@/infrastructure/storage/supabase-storage";
 
 const TOKEN_PREFIX = "pfex_live_";
 const MAX_ROWS = 5000;
@@ -28,6 +30,7 @@ export type ExcelSyncPayload = {
   products?: ExcelSyncProduct[];
   brands?: Array<{ id?: string; name: string; active?: boolean }>;
   categories?: Array<{ id?: number; name: string; visible?: boolean }>;
+  newProducts?: Array<{ name: string; detail?: string; presentation?: string; brand: string; publicPrice?: number; memberPrice?: number; categoryId?: number; categoryName?: string; image?: string; imageBase64?: string; imageName?: string; imageType?: string; status?: string }>;
 };
 
 function hashToken(token: string) {
@@ -47,11 +50,15 @@ function validInteger(value: unknown, min = 0) {
   return typeof value === "number" && Number.isInteger(value) && value >= min && value <= 2_147_483_647;
 }
 
+function validMoney(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && Math.abs(value * 100 - Math.round(value * 100)) < 1e-8 && value >= 0 && value <= 2_147_483_647;
+}
+
 function validProduct(product: ExcelSyncProduct) {
   if (!validInteger(product.id, 1)) return "El ID del producto no es válido.";
   if (product.name !== undefined && !cleanText(product.name, 500)) return `El producto ${product.id} no tiene nombre.`;
-  if (product.publicPrice !== undefined && !validInteger(product.publicPrice)) return `El precio público del producto ${product.id} no es válido.`;
-  if (product.memberPrice !== undefined && !validInteger(product.memberPrice)) return `El precio logueado del producto ${product.id} no es válido.`;
+  if (product.publicPrice !== undefined && !validMoney(product.publicPrice)) return `El precio público del producto ${product.id} no es válido.`;
+  if (product.memberPrice !== undefined && !validMoney(product.memberPrice)) return `El precio logueado del producto ${product.id} no es válido.`;
   if (product.categoryId !== undefined && !validInteger(product.categoryId, 1)) return `La categoría del producto ${product.id} no es válida.`;
   if (product.categoryIds !== undefined && (!Array.isArray(product.categoryIds) || product.categoryIds.some((id) => !validInteger(id, 1)))) {
     return `Las categorías del producto ${product.id} no son válidas.`;
@@ -142,13 +149,25 @@ export async function applyExcelSync(payload: ExcelSyncPayload) {
   const products = payload.products ?? [];
   const brands = payload.brands ?? [];
   const categories = payload.categories ?? [];
+  const newProducts = payload.newProducts ?? [];
   if (products.length + brands.length + categories.length > MAX_ROWS) throw new Error("La sincronización supera el límite de filas permitido.");
   for (const product of products) {
     const error = validProduct(product);
     if (error) throw new Error(error);
   }
+  if (products.length + brands.length + categories.length + newProducts.length > MAX_ROWS) throw new Error("La sincronizacion supera el limite de filas permitido.");
+  for (const product of newProducts) {
+    if (!cleanText(product.name, 500) || !cleanText(product.brand, 160)) throw new Error("El nuevo producto necesita nombre y marca.");
+    if (product.publicPrice !== undefined && !validMoney(product.publicPrice)) throw new Error("El precio p\u00fablico del nuevo producto no es v\u00e1lido.");
+    if (product.memberPrice !== undefined && !validMoney(product.memberPrice)) throw new Error("El precio logueado del nuevo producto no es v\u00e1lido.");
+    if (product.categoryId !== undefined && !validInteger(product.categoryId, 1)) throw new Error("La categoria del nuevo producto no es valida.");
+    if (product.imageBase64 !== undefined && (!product.imageBase64 || product.imageBase64.length > 7_000_000)) throw new Error("La imagen del nuevo producto es invalida o supera el limite de tamaño.");
+    if (product.status !== undefined && product.status !== "published" && product.status !== "inactive") throw new Error("El estado del nuevo producto no es valido.");
+  }
   const client = await postgresPool.connect();
   let productsUpdated = 0;
+  let productsCreated = 0;
+  const createdProductIds: number[] = [];
   let brandsUpdated = 0;
   let categoriesUpdated = 0;
   try {
@@ -210,7 +229,7 @@ export async function applyExcelSync(payload: ExcelSyncPayload) {
         `with incoming as (
            select * from jsonb_to_recordset($1::jsonb) as x(
              id integer, name text, detail text, presentation text, brand text,
-             "publicPrice" integer, "memberPrice" integer, stock integer,
+             "publicPrice" numeric(12,2), "memberPrice" numeric(12,2), stock integer,
              sold_out boolean, status text, "categoryId" integer
            )
          )
@@ -235,6 +254,59 @@ export async function applyExcelSync(payload: ExcelSyncPayload) {
         [JSON.stringify(products)],
       );
       productsUpdated = updated.rowCount ?? 0;
+    }
+
+    if (newProducts.length) {
+      const ids = await allocateProductIds(client, newProducts.length);
+      const knownBrands = new Set((await client.query<{ name: string }>("select name from brands")).rows.map((row) => normalized(row.name)));
+      for (let index = 0; index < newProducts.length; index += 1) {
+        const product = newProducts[index];
+        const brand = cleanText(product.brand, 160);
+        if (!knownBrands.has(normalized(brand))) {
+          const brandId = `excel-${randomUUID()}`;
+          await client.query("insert into brands (id, code, name, featured, active) values ($1, $1, $2, false, true)", [brandId, brand]);
+          knownBrands.add(normalized(brand));
+        }
+        const name = cleanText(product.name, 500);
+        const detail = cleanText(product.detail || name, 2000);
+        const presentation = cleanText(product.presentation, 160);
+        let category: { id: number; name: string } | undefined;
+        if (product.categoryId !== undefined) {
+          const categoryResult = await client.query<{ id: number; name: string }>("select id, name from categories where id = $1 and deleted_at is null limit 1", [product.categoryId]);
+          category = categoryResult.rows[0];
+          if (!category) throw new Error(`La categoria ${product.categoryId} no existe.`);
+        } else {
+          const categoryName = cleanText(product.categoryName, 160) || "Sin categoria";
+          const categoryResult = await client.query<{ id: number; name: string }>("select id, name from categories where deleted_at is null and lower(name) = lower($1) limit 1", [categoryName]);
+          category = categoryResult.rows[0];
+          if (!category) {
+            const slugBase = normalized(categoryName).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "categoria";
+            let slug = slugBase;
+            let suffix = 2;
+            while ((await client.query("select 1 from categories where slug = $1 and deleted_at is null limit 1", [slug])).rowCount) slug = `${slugBase}-${suffix++}`;
+            const next = await client.query<{ id: number }>("select coalesce(max(id), 0) + 1 as id from categories");
+            category = { id: next.rows[0].id, name: categoryName };
+            await client.query("insert into categories (id, name, slug, visible) values ($1, $2, $3, true)", [category.id, category.name, slug]);
+          }
+        }
+        let image = cleanText(product.image, 2000) || null;
+        if (!image && product.imageBase64) {
+          const imageBytes = Buffer.from(product.imageBase64, "base64");
+          if (!imageBytes.length || imageBytes.length > 5_000_000) throw new Error("La imagen del nuevo producto supera el limite de 5 MB.");
+          const imageFile = new File([imageBytes], cleanText(product.imageName, 180) || `${name}.png`, { type: cleanText(product.imageType, 120) || "image/png" });
+          image = await storeImageOnSupabase(imageFile, "products", `${brand}-${name}`);
+        }
+        await client.query(
+          `insert into products (id, sku, name, detail, presentation, category_id, category_name, category_ids, category_names, brand,
+             vegano, kosher, testeado_en_animales, public_price, member_price, image, status, sold_out, featured, featured_priority,
+             trending, stock, views_count, sales_count, description, source_section)
+           values ($1, $2, $3, $4, $5, $6, $7, jsonb_build_array($6::integer), jsonb_build_array($7::text), $8,
+             false, false, null, $9, $10, $11, $12, false, false, null, false, null, 0, 0, $4, null)`,
+          [ids[index], `imp-${randomUUID()}`, name, detail, presentation, category.id, category.name, brand, product.publicPrice ?? 0, product.memberPrice ?? 0, image, product.status ?? "published"],
+        );
+        productsCreated += 1;
+        createdProductIds.push(ids[index]);
+      }
     }
 
     if (false) {
@@ -273,7 +345,7 @@ export async function applyExcelSync(payload: ExcelSyncPayload) {
     }
     }
     await client.query("commit");
-    return { productsUpdated, brandsUpdated, categoriesUpdated };
+    return { productsUpdated, productsCreated, createdProductIds, brandsUpdated, categoriesUpdated };
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
     throw error;

@@ -4,8 +4,12 @@ Option Explicit
 Private Const MAX_LINES As Long = 5000
 
 Public Sub ActualizarCatalogo()
-    Dim text As String, lines() As String, section As String, i As Long
+    Dim text As String, lines() As String, section As String, i As Long, eventsEnabled As Boolean
+    eventsEnabled = Application.EnableEvents
+    On Error GoTo Failed
+    Application.EnableEvents = False
     DesprotegerPlanillas
+    CrearBackupPrecios
     LimpiarCatalogoInterno
     text = HttpGet(CStr(ThisWorkbook.Worksheets("CONFIGURACION").Range("B1").Value), CStr(ThisWorkbook.Worksheets("CONFIGURACION").Range("B2").Value))
     lines = Split(text, vbCrLf)
@@ -21,7 +25,13 @@ ContinueLine:
     Next i
     ThisWorkbook.Worksheets("CONFIGURACION").Range("B3").Value = Now
     ActualizarPedidoDesdeProductos
+    OrdenarProductosPorMarca
     AjustarFormatoPrecios
+    Application.EnableEvents = eventsEnabled
+    Exit Sub
+Failed:
+    Application.EnableEvents = eventsEnabled
+    Err.Raise Err.Number, Err.Source, Err.Description
 End Sub
 
 Private Sub LimpiarCatalogoInterno()
@@ -107,7 +117,11 @@ Private Sub ActualizarPedidoDesdeProductos()
                 displayText = Trim$(CStr(source.Cells(row, 4).Value))
                 If Len(displayText) = 0 Then displayText = productName
                 target.Cells(outRow, 1).Value = IIf(LCase$(CStr(source.Cells(row, 13).Value)) = "inactive", "NO", "SI")
-                target.Cells(outRow, 2).Value = source.Cells(row, 1).Value
+                If IsNumeric(source.Cells(row, 1).Value) Then
+                    target.Cells(outRow, 2).Value = CLng(source.Cells(row, 1).Value)
+                Else
+                    target.Cells(outRow, 2).Value = CStr(source.Cells(row, 1).Value)
+                End If
                 target.Cells(outRow, 3).Value = DisplayProductText(displayText, brand)
                 target.Cells(outRow, 4).Value = source.Cells(row, 7).Value
                 target.Cells(outRow, 5).Value = source.Cells(row, 8).Value
@@ -116,6 +130,35 @@ Private Sub ActualizarPedidoDesdeProductos()
         Next row
     Next brandKey
     If outRow <= targetLast Then target.Range(target.Cells(outRow, 1), target.Cells(targetLast, 5)).ClearContents
+End Sub
+
+Public Sub OrdenarProductosPorMarca()
+    Dim sh As Object, row As Long, last As Long, productStart As Long, productEnd As Long
+    Set sh = ThisWorkbook.Worksheets("PRECIOS")
+    last = sh.Cells(sh.Rows.Count, 3).End(-4162).Row
+    If last < 5 Then Exit Sub
+
+    row = 4
+    Do While row <= last
+        If Len(Trim$(CStr(sh.Cells(row, 1).Value))) = 0 And Len(Trim$(CStr(sh.Cells(row, 3).Value))) > 0 Then
+            productStart = row + 1
+            productEnd = productStart
+            Do While productEnd <= last _
+                And Len(Trim$(CStr(sh.Cells(productEnd, 1).Value))) > 0 _
+                And Len(Trim$(CStr(sh.Cells(productEnd, 3).Value))) > 0
+                productEnd = productEnd + 1
+            Loop
+            productEnd = productEnd - 1
+
+            If productEnd >= productStart Then
+                sh.Range("A" & productStart & ":E" & productEnd).Sort _
+                    Key1:=sh.Range("C" & productStart), Order1:=1, Header:=2, Orientation:=1
+            End If
+            row = productEnd + 1
+        Else
+            row = row + 1
+        End If
+    Loop
 End Sub
 
 Private Sub ActualizarSeparadoresDesdeProductos()
@@ -150,17 +193,266 @@ Private Sub WriteCatalogRow(ByVal section As String, ByVal line As String)
         If usedLast >= 2 Then target.Range(target.Cells(2, 1), target.Cells(usedLast, 13)).ClearContents
     End If
     row = target.Cells(target.Rows.Count, 1).End(xlUp).Row + 1
-    For j = 0 To UBound(values): target.Cells(row, j + 1).Value = values(j): Next j
+    For j = 0 To UBound(values)
+        If section = "[PRODUCTS]" And j = 0 And IsNumeric(values(j)) Then
+            target.Cells(row, j + 1).Value = CLng(values(j))
+        Else
+            target.Cells(row, j + 1).Value = values(j)
+        End If
+    Next j
 End Sub
 
 Public Sub SincronizarCambios()
-    Dim payload As String
+    Dim payload As String, response As String
     DesprotegerPlanillas
+    CrearBackupPrecios
+    ValidarIdsPrecios
     ActualizarProductosDesdePrecios
     payload = "{""workbookId"":""" & Json(CStr(ThisWorkbook.Name)) & """,""products"":["
-    payload = payload & ProductsJson() & "],""brands"":[" & BrandsJson() & "],""categories"":[" & CategoriesJson() & "]}"
-    Call HttpPost(CStr(ThisWorkbook.Worksheets("CONFIGURACION").Range("B1").Value), CStr(ThisWorkbook.Worksheets("CONFIGURACION").Range("B2").Value), payload)
+    payload = payload & ProductsJson() & "],""newProducts"":[" & NewProductsJson() & "],""brands"":[" & BrandsJson() & "],""categories"":[" & CategoriesJson() & "]}"
+    response = HttpPost(CStr(ThisWorkbook.Worksheets("CONFIGURACION").Range("B1").Value), CStr(ThisWorkbook.Worksheets("CONFIGURACION").Range("B2").Value), payload)
+    AsignarIdsNuevos response
+    ActualizarCatalogo
     MsgBox "Cambios sincronizados correctamente.", vbInformation, "PintoFruta"
+End Sub
+
+Public Sub ImportarPedidoCliente()
+    Dim importSheet As Object, products As Object, prices As Object, found As Object, priceCell As Object
+    Dim headerRow As Long, lastRow As Long, row As Long
+    Dim brandCol As Long, detailCol As Long, priceCol As Long, idCol As Long
+    Dim brand As String, detail As String, status As String
+    Dim price As Variant, matched As Long, notFound As Long, ambiguous As Long
+
+    DesprotegerPlanillas
+    Set importSheet = ThisWorkbook.Worksheets("IMPORTAR PEDIDO")
+    Set products = ThisWorkbook.Worksheets("PRODUCTOS")
+    Set prices = ThisWorkbook.Worksheets("PRECIOS")
+    headerRow = FindImportHeaderRow(importSheet)
+    If headerRow = 0 Then Err.Raise vbObjectError + 710, , "No se encontro una fila con los encabezados CANTIDAD, MARCA, DETALLE / VARIEDAD y PRECIO."
+
+    brandCol = FindImportHeaderColumn(importSheet, headerRow, "MARCA")
+    detailCol = FindImportHeaderColumn(importSheet, headerRow, "DETALLE")
+    priceCol = FindImportHeaderColumn(importSheet, headerRow, "PRECIO")
+    idCol = FindImportHeaderColumn(importSheet, headerRow, "ID")
+    If detailCol = 0 Or priceCol = 0 Then Err.Raise vbObjectError + 711, , "Faltan las columnas DETALLE / VARIEDAD o PRECIO."
+
+    importSheet.Cells(headerRow, 7).Value = "ID EN SITIO"
+    importSheet.Cells(headerRow, 8).Value = "RESULTADO"
+    importSheet.Cells(headerRow, 9).Value = "DETALLE EN SITIO"
+    importSheet.Range(importSheet.Cells(headerRow + 1, 7), importSheet.Cells(importSheet.Rows.Count, 9)).ClearContents
+    lastRow = importSheet.Cells(importSheet.Rows.Count, detailCol).End(-4162).Row
+
+    For row = headerRow + 1 To lastRow
+        detail = Trim$(CStr(importSheet.Cells(row, detailCol).Value))
+        brand = ""
+        If brandCol > 0 Then brand = Trim$(CStr(importSheet.Cells(row, brandCol).Value))
+        If Len(detail) > 0 And NormalizeMatch(detail) <> "detallevariedad" Then
+            Set found = Nothing
+            status = "NO ENCONTRADO"
+            If idCol > 0 And Len(Trim$(CStr(importSheet.Cells(row, idCol).Value))) > 0 Then
+                Set found = products.Columns(1).Find(What:=importSheet.Cells(row, idCol).Value, LookIn:=-4163, LookAt:=1)
+                If Not found Is Nothing Then status = "MATCH POR ID"
+            End If
+            If found Is Nothing Then Set found = FindImportedProduct(products, brand, detail, status)
+
+            If Not found Is Nothing Then
+                price = importSheet.Cells(row, priceCol).Value
+                If IsNumeric(price) Then
+                    products.Cells(found.Row, 7).Value = price
+                    Set priceCell = prices.Columns(2).Find(What:=products.Cells(found.Row, 1).Value, LookIn:=-4163, LookAt:=1)
+                    If Not priceCell Is Nothing Then prices.Cells(priceCell.Row, 4).Value = price
+                End If
+                importSheet.Cells(row, 7).Value = products.Cells(found.Row, 1).Value
+                importSheet.Cells(row, 8).Value = status
+                importSheet.Cells(row, 9).Value = products.Cells(found.Row, 3).Value
+                matched = matched + 1
+            Else
+                importSheet.Cells(row, 8).Value = status
+                notFound = notFound + 1
+                If status = "AMBIGUO" Then ambiguous = ambiguous + 1
+            End If
+        End If
+    Next row
+
+    importSheet.Columns("G:I").AutoFit
+    importSheet.Cells(1, 11).Value = "ULTIMA IMPORTACION"
+    importSheet.Cells(2, 11).Value = "Coincidencias: " & matched & " | No actualizados: " & notFound & IIf(ambiguous > 0, " | Ambiguos: " & ambiguous, "")
+    If Application.Visible Then MsgBox "Importacion finalizada." & vbCrLf & "Coincidencias: " & matched & vbCrLf & "No actualizados: " & notFound & IIf(ambiguous > 0, vbCrLf & "Ambiguos: " & ambiguous, ""), vbInformation, "PintoFruta"
+End Sub
+
+Private Function FindImportHeaderRow(ByVal sh As Object) As Long
+    Dim row As Long, lastColumn As Long
+    For row = 1 To 50
+        lastColumn = sh.Cells(row, sh.Columns.Count).End(-4159).Column
+        If FindImportHeaderColumn(sh, row, "DETALLE") > 0 And FindImportHeaderColumn(sh, row, "PRECIO") > 0 Then
+            FindImportHeaderRow = row
+            Exit Function
+        End If
+    Next row
+    FindImportHeaderRow = 0
+End Function
+
+Private Function FindImportHeaderColumn(ByVal sh As Object, ByVal headerRow As Long, ByVal headerText As String) As Long
+    Dim column As Long, lastColumn As Long, value As String
+    lastColumn = sh.Cells(headerRow, sh.Columns.Count).End(-4159).Column
+    For column = 1 To lastColumn
+        value = NormalizeMatch(CStr(sh.Cells(headerRow, column).Value))
+        If InStr(1, value, NormalizeMatch(headerText), vbBinaryCompare) > 0 Then
+            FindImportHeaderColumn = column
+            Exit Function
+        End If
+    Next column
+    FindImportHeaderColumn = 0
+End Function
+
+Private Function FindImportedProduct(ByVal source As Object, ByVal importBrand As String, ByVal importDetail As String, ByRef result As String) As Object
+    Dim row As Long, last As Long, brand As String, candidate As String, importText As String
+    Dim score As Long, bestScore As Long, secondScore As Long, bestRow As Long
+    importText = NormalizeMatch(DisplayProductText(importDetail, importBrand))
+    last = source.Cells(source.Rows.Count, 1).End(-4162).Row
+    For row = 2 To last
+        brand = CStr(source.Cells(row, 6).Value)
+        candidate = NormalizeMatch(DisplayProductText(CStr(source.Cells(row, 3).Value), brand))
+        score = MatchScore(importBrand, importText, brand, candidate, CStr(source.Cells(row, 3).Value), CStr(source.Cells(row, 4).Value))
+        If score > bestScore Then
+            secondScore = bestScore
+            bestScore = score
+            bestRow = row
+        ElseIf score > secondScore Then
+            secondScore = score
+        End If
+    Next row
+    If bestScore >= 80 And bestScore - secondScore >= 12 Then
+        result = "MATCH NORMALIZADO"
+        Set FindImportedProduct = source.Cells(bestRow, 1)
+    ElseIf bestScore >= 80 Then
+        result = "AMBIGUO"
+        Set FindImportedProduct = Nothing
+    Else
+        result = "NO ENCONTRADO"
+        Set FindImportedProduct = Nothing
+    End If
+End Function
+
+Private Function MatchScore(ByVal importBrand As String, ByVal importText As String, ByVal siteBrand As String, ByVal siteText As String, ByVal fullName As String, ByVal siteDetail As String) As Long
+    Dim score As Long, token As Variant, tokens() As String, sourceText As String, importBrandKey As String, siteBrandKey As String
+    importBrandKey = NormalizeMatch(importBrand): siteBrandKey = NormalizeMatch(siteBrand)
+    If Len(importBrandKey) > 0 And Len(siteBrandKey) > 0 Then
+        If InStr(1, importBrandKey, siteBrandKey, vbBinaryCompare) = 0 And InStr(1, siteBrandKey, importBrandKey, vbBinaryCompare) = 0 Then Exit Function
+        If importBrandKey = siteBrandKey Then score = score + 100 Else score = score + 60
+    End If
+    If importText = siteText Then MatchScore = score + 1000: Exit Function
+    If Len(importText) > 0 And (InStr(1, siteText, importText, vbBinaryCompare) > 0 Or InStr(1, importText, siteText, vbBinaryCompare) > 0) Then score = score + 500
+    sourceText = NormalizeMatch(fullName & " " & siteDetail)
+    If Len(importText) > 0 And InStr(1, sourceText, importText, vbBinaryCompare) > 0 Then score = score + 350
+    tokens = Split(importText, " ")
+    For Each token In tokens
+        If Len(CStr(token)) >= 4 And InStr(1, siteText, CStr(token), vbBinaryCompare) > 0 Then score = score + 8
+    Next token
+    MatchScore = score
+End Function
+
+Public Sub ValidarIdsPrecios()
+    Dim sh As Object, seen As Object, row As Long, last As Long, productId As String, eventsEnabled As Boolean
+    eventsEnabled = Application.EnableEvents
+    Application.EnableEvents = False
+    Set sh = ThisWorkbook.Worksheets("PRECIOS")
+    Set seen = CreateObject("Scripting.Dictionary")
+    last = sh.Cells(sh.Rows.Count, 3).End(-4162).Row
+    For row = 4 To last
+        If Len(Trim$(CStr(sh.Cells(row, 3).Value))) > 0 And Len(Trim$(CStr(sh.Cells(row, 1).Value))) = 0 Then
+            sh.Cells(row, 2).ClearContents
+        ElseIf Len(Trim$(CStr(sh.Cells(row, 1).Value))) > 0 Then
+            productId = Trim$(CStr(sh.Cells(row, 2).Value))
+            If Len(productId) > 0 Then
+                If seen.Exists(productId) Then
+                    sh.Cells(row, 2).ClearContents
+                    sh.Cells(row, 2).Interior.Color = RGB(255, 220, 180)
+                Else
+                    seen.Add productId, True
+                End If
+            End If
+        End If
+    Next row
+    Application.EnableEvents = eventsEnabled
+End Sub
+
+Private Sub CrearBackupPrecios()
+    Dim source As Object, backup As Object, last As Long, row As Long, outRow As Long
+    On Error Resume Next
+    Set backup = ThisWorkbook.Worksheets("BACKUP_PRECIOS")
+    On Error GoTo 0
+    If backup Is Nothing Then
+        Set backup = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+        backup.Name = "BACKUP_PRECIOS"
+    End If
+    Set source = ThisWorkbook.Worksheets("PRECIOS")
+    backup.Cells.ClearContents
+    backup.Range("A1:G1").Value = Array("FECHA", "ACTIVO", "ID", "DETALLE / VARIEDAD", "PUBLICO", "DESCUENTO", "FILA ORIGEN")
+    last = source.Cells(source.Rows.Count, 3).End(-4162).Row
+    outRow = 2
+    For row = 3 To last
+        If Len(Trim$(CStr(source.Cells(row, 3).Value))) > 0 Then
+            backup.Cells(outRow, 1).Value = Now
+            backup.Cells(outRow, 2).Value = source.Cells(row, 1).Value
+            backup.Cells(outRow, 3).Value = source.Cells(row, 2).Value
+            backup.Cells(outRow, 4).Value = source.Cells(row, 3).Value
+            backup.Cells(outRow, 5).Value = source.Cells(row, 4).Value
+            backup.Cells(outRow, 6).Value = source.Cells(row, 5).Value
+            backup.Cells(outRow, 7).Value = row
+            outRow = outRow + 1
+        End If
+    Next row
+End Sub
+
+Private Function NewProductsJson() As String
+    Dim sh As Object, row As Long, last As Long, brand As String, s As String, q As String, item As String
+    q = Chr$(34)
+    Set sh = ThisWorkbook.Worksheets("PRECIOS")
+    last = sh.Cells(sh.Rows.Count, 3).End(-4162).Row
+    For row = 4 To last
+        If Len(Trim$(CStr(sh.Cells(row, 1).Value))) = 0 And Len(Trim$(CStr(sh.Cells(row, 2).Value))) = 0 And Len(Trim$(CStr(sh.Cells(row, 3).Value))) > 0 Then
+            brand = Trim$(CStr(sh.Cells(row, 3).Value))
+        ElseIf Len(Trim$(CStr(sh.Cells(row, 1).Value))) > 0 And Len(Trim$(CStr(sh.Cells(row, 2).Value))) = 0 And Len(Trim$(CStr(sh.Cells(row, 3).Value))) > 0 And Len(brand) > 0 Then
+            If Len(s) > 0 Then s = s & ","
+            item = "{" & q & "name" & q & ":" & q & Json(sh.Cells(row, 3).Value) & q
+            item = item & "," & q & "detail" & q & ":" & q & Json(sh.Cells(row, 3).Value) & q
+            item = item & "," & q & "brand" & q & ":" & q & Json(brand) & q
+            item = item & "," & q & "publicPrice" & q & ":" & MoneyOrNull(sh.Cells(row, 4).Value)
+            item = item & "," & q & "memberPrice" & q & ":" & MoneyOrNull(sh.Cells(row, 5).Value)
+            item = item & "," & q & "status" & q & ":" & q & IIf(UCase$(Trim$(CStr(sh.Cells(row, 1).Value))) = "NO", "inactive", "published") & q & "}"
+            s = s & item
+        End If
+    Next row
+    NewProductsJson = s
+End Function
+
+Private Sub AsignarIdsNuevos(ByVal response As String)
+    Dim sh As Object, marker As String, startAt As Long, endAt As Long, raw As String
+    Dim ids() As String, row As Long, last As Long, index As Long, brand As String, value As String
+    marker = """createdProductIds"":["
+    startAt = InStr(1, response, marker, vbBinaryCompare)
+    If startAt = 0 Then Exit Sub
+    startAt = startAt + Len(marker)
+    endAt = InStr(startAt, response, "]", vbBinaryCompare)
+    If endAt = 0 Then Exit Sub
+    raw = Mid$(response, startAt, endAt - startAt)
+    If Len(Trim$(raw)) = 0 Then Exit Sub
+    ids = Split(raw, ",")
+    Set sh = ThisWorkbook.Worksheets("PRECIOS")
+    last = sh.Cells(sh.Rows.Count, 3).End(-4162).Row
+    index = 0
+    For row = 4 To last
+        If Len(Trim$(CStr(sh.Cells(row, 1).Value))) = 0 And Len(Trim$(CStr(sh.Cells(row, 2).Value))) = 0 And Len(Trim$(CStr(sh.Cells(row, 3).Value))) > 0 Then
+            brand = Trim$(CStr(sh.Cells(row, 3).Value))
+        ElseIf Len(Trim$(CStr(sh.Cells(row, 1).Value))) > 0 And Len(Trim$(CStr(sh.Cells(row, 2).Value))) = 0 And Len(Trim$(CStr(sh.Cells(row, 3).Value))) > 0 And Len(brand) > 0 Then
+            If index <= UBound(ids) Then
+                value = Trim$(ids(index))
+                If IsNumeric(value) Then sh.Cells(row, 2).Value = CLng(value)
+                index = index + 1
+            End If
+        End If
+    Next row
 End Sub
 
 Private Sub ActualizarProductosDesdePrecios()
@@ -171,7 +463,7 @@ Private Sub ActualizarProductosDesdePrecios()
     last = target.Cells(target.Rows.Count, 3).End(-4162).Row
     For row = 2 To last
         productName = Trim$(CStr(target.Cells(row, 3).Value))
-        If Len(productName) > 0 Then
+        If Len(productName) > 0 And Len(Trim$(CStr(target.Cells(row, 2).Value))) > 0 Then
             Set found = Nothing
             If Len(Trim$(CStr(target.Cells(row, 2).Value))) > 0 Then
                 Set found = source.Columns(1).Find(What:=target.Cells(row, 2).Value, LookIn:=-4163, LookAt:=1)
@@ -223,6 +515,10 @@ End Function
 Private Function NormalizeMatch(ByVal value As String) As String
     Dim text As String, compact As String, i As Long, code As Long, ch As String
     text = LCase$(Trim$(value))
+    text = Replace(text, ChrW(&HE1), "a"): text = Replace(text, ChrW(&HE9), "e"): text = Replace(text, ChrW(&HED), "i")
+    text = Replace(text, ChrW(&HF3), "o"): text = Replace(text, ChrW(&HFA), "u"): text = Replace(text, ChrW(&HF1), "n")
+    text = Replace(text, ChrW(&HC1), "a"): text = Replace(text, ChrW(&HC9), "e"): text = Replace(text, ChrW(&HCD), "i")
+    text = Replace(text, ChrW(&HD3), "o"): text = Replace(text, ChrW(&HDA), "u"): text = Replace(text, ChrW(&HD1), "n")
     text = Replace(text, "sin stock", "")
     text = Replace(text, "nuevo", "")
     Do While InStr(1, text, "  ", vbBinaryCompare) > 0
@@ -238,7 +534,7 @@ End Function
 
 Public Sub DesprotegerPlanillas()
     Dim names As Variant, item As Variant
-    names = Array("PRECIOS", "PRODUCTOS", "MARCAS", "CATEGORIAS", "CONFIGURACION")
+    names = Array("PRECIOS", "PRODUCTOS", "MARCAS", "CATEGORIAS", "CONFIGURACION", "BACKUP_PRECIOS")
     On Error Resume Next
     For Each item In names
         ThisWorkbook.Worksheets(CStr(item)).Unprotect
@@ -260,8 +556,8 @@ Private Function ProductsJson() As String
             item = item & "," & q & "detail" & q & ":" & q & Json(sh.Cells(r, 4).Value) & q
             item = item & "," & q & "presentation" & q & ":" & q & Json(sh.Cells(r, 5).Value) & q
             item = item & "," & q & "brand" & q & ":" & q & Json(sh.Cells(r, 6).Value) & q
-            item = item & "," & q & "publicPrice" & q & ":" & NumberOrNull(sh.Cells(r, 7).Value)
-            item = item & "," & q & "memberPrice" & q & ":" & NumberOrNull(sh.Cells(r, 8).Value)
+            item = item & "," & q & "publicPrice" & q & ":" & MoneyOrNull(sh.Cells(r, 7).Value)
+            item = item & "," & q & "memberPrice" & q & ":" & MoneyOrNull(sh.Cells(r, 8).Value)
             item = item & "," & q & "categoryId" & q & ":" & NumberOrNull(sh.Cells(r, 9).Value)
             item = item & "," & q & "stock" & q & ":" & NumberOrNull(sh.Cells(r, 11).Value)
             item = item & "," & q & "soldOut" & q & ":" & IIf(sh.Cells(r, 12).Value = 1, "true", "false")
@@ -308,4 +604,14 @@ End Function
 
 Private Function Json(ByVal value As Variant) As String: Json = Replace(Replace(Replace(CStr(value), "\", "\\"), """", "\"""), vbCrLf, "\n"): End Function
 Private Function NumberOrNull(ByVal value As Variant) As String: If IsNumeric(value) And Len(Trim$(CStr(value))) > 0 Then NumberOrNull = CStr(CLng(value)) Else NumberOrNull = "null"
+End Function
+Private Function MoneyOrNull(ByVal value As Variant) As String
+    Dim formatted As String
+    If IsNumeric(value) And Len(Trim$(CStr(value))) > 0 Then
+        formatted = Format$(CDbl(value), "0.00")
+        formatted = Replace(formatted, Application.DecimalSeparator, ".")
+        MoneyOrNull = formatted
+    Else
+        MoneyOrNull = "null"
+    End If
 End Function

@@ -41,9 +41,13 @@ async function main() {
   }
   for(const key of ['name','detail','brand']) for(const value of [1,true,[],{},'bad\u0000text']) assert.ok(getProductFieldErrors({...valid,[key]:value})[key]);
   assert.deepEqual(getProductFieldErrors({publicPrice:1},['publicPrice']),{});
-  assert.deepEqual(Object.keys(getProductFieldErrors({publicPrice:0},['publicPrice'])),['publicPrice']);
-  for(const key of ['publicPrice','memberPrice']) for(const value of [0,-1,1.5,'NaN','Infinity',Infinity,NaN,2147483648,true,{},[]]) {
+  assert.deepEqual(getProductFieldErrors({publicPrice:0},['publicPrice']),{});
+  assert.deepEqual(getProductFieldErrors({memberPrice:''},['memberPrice']),{});
+  for(const key of ['publicPrice','memberPrice']) for(const value of [-1,'NaN','Infinity',Infinity,NaN,2147483648,true,{},[]]) {
     assert.ok(getProductFieldErrors({...valid,[key]:value})[key],`${key}: ${String(value)}`);
+  }
+  for(const key of ['publicPrice','memberPrice']) for(const value of [1.5,1.55,'1,50']) {
+    assert.deepEqual(getProductFieldErrors({...valid,[key]:value})[key],undefined,`${key}: ${String(value)}`);
   }
   assert.deepEqual(getProductFieldErrors({...valid,publicPrice:1,memberPrice:2147483647}),{});
   assert.deepEqual(getProductFieldErrors({...valid,featuredPriority:-5}),{});
@@ -53,11 +57,12 @@ async function main() {
   for(const payload of ['null','[]','"string"','{bad']) {
     const fixture=actionFixture();assert.equal((await fixture.save(payload)).ok,false);assert.equal(fixture.calls.queries.length,0);
   }
-  console.log('OK required text, whitespace-only values, positive integer price bounds, optional priority, category arrays and malformed payloads; invalid input rejected before DB access.');
+  console.log('OK required text, whitespace-only values, positive decimal price bounds, optional priority, category arrays and malformed payloads; invalid input rejected before DB access.');
 
   const content={products:[],brands:[],categories:[],users:[],heroSlides:[],banners:[],packs:[]};
   const table=load('src/application/admin-crud.ts').getAdminTableDefinitions(content).find(table=>table.key==='products');
   for(const key of PRODUCT_REQUIRED_FIELDS) assert.equal(table.fields.find(field=>field.key===key).required,true,key);
+  for(const key of ['publicPrice','memberPrice']) assert.equal(table.fields.find(field=>field.key===key).required,false,key);
   assert.equal(table.fields.find(field=>field.key==='image').required,false);
 
   for(const [options,payload,field] of [

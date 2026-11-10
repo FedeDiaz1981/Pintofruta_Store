@@ -35,7 +35,12 @@ function textHeight(text: string, width: number, fontSize: number) {
 
 export async function buildCustomerOrderFile(products: CustomerOrderProduct[], audience: CustomerOrderAudience, generatedAt = new Date()) {
   if (audience !== "public" && audience !== "member") throw new Error("Elegí una lista pública o con descuento.");
-  const available = products.filter(product => product.status === "published" && !product.sold_out && !product.deleted_at);
+  const available = products.filter(product =>
+    product.status === "published" &&
+    !product.sold_out &&
+    !product.deleted_at &&
+    (audience === "member" ? Number(product.member_price) > 0 || Number(product.public_price) > 0 : Number(product.public_price) > 0),
+  );
   const groups = new Map<string, { name: string; products: CustomerOrderProduct[] }>();
   for (const product of [...available].sort((a, b) => a.brand.localeCompare(b.brand, "es", { sensitivity: "base" }) || a.name.localeCompare(b.name, "es", { sensitivity: "base", numeric: true }) || a.id - b.id)) {
     const name = product.brand.trim() || "Sin marca";

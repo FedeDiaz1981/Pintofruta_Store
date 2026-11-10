@@ -1,4 +1,4 @@
-import { cp, mkdir, rm } from "node:fs/promises";
+import { copyFile, cp, mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -55,6 +55,21 @@ async function main() {
   for (const item of excludedScriptItems) {
     await rm(path.join(packageRoot, item), { force: true });
   }
+
+  const artifactsDirectory = path.join(projectRoot, "artifacts");
+  const artifactFiles = await readdir(artifactsDirectory);
+  const synchronizerFiles = artifactFiles
+    .filter((file) => /^PintoFruta_Catalogo_Sincronizador_v\d+\.xlsm$/i.test(file))
+    .sort((left, right) => {
+      const leftVersion = Number(left.match(/_v(\d+)\.xlsm$/i)?.[1] ?? 0);
+      const rightVersion = Number(right.match(/_v(\d+)\.xlsm$/i)?.[1] ?? 0);
+      return rightVersion - leftVersion;
+    });
+  const synchronizerFile = synchronizerFiles[0];
+  if (!synchronizerFile) throw new Error("No hay un sincronizador Excel para incluir en el paquete.");
+  const downloadsDirectory = path.join(packageRoot, "public", "downloads");
+  await mkdir(downloadsDirectory, { recursive: true });
+  await copyFile(path.join(artifactsDirectory, synchronizerFile), path.join(downloadsDirectory, "Sincronizador de precios.xlsm"));
 
   // Keep the app icon from src/app/icon.png so production shows the Pintofruta logo
   // instead of the legacy favicon copied from public/assets.

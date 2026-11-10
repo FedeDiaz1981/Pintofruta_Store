@@ -3,17 +3,16 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { ArrowUpRight, PackageX, Plus, Search, Trash2 } from "lucide-react";
+import { ArrowUpRight, BookOpen, PackageX, Plus, Search, Trash2 } from "lucide-react";
 import styles from "./admin-workspace.module.css";
 import { deleteAdminRecord, deleteAdminRecords, saveAdminRecord, setProductSoldOut } from "@/app/admin/actions";
-import { ExcelImportButton } from "@/components/admin/excel-import-button";
 import { PriceListDownloadButton } from "@/components/admin/price-list-download-button";
 import { CustomerOrderDownloadButton } from "@/components/admin/customer-order-download-button";
 import { ProductImageManager } from "@/components/admin/product-image-manager";
 import { ProductAvailabilityManager } from "@/components/admin/product-availability-manager";
 import { ProductDuplicatesManager } from "@/components/admin/product-duplicates-manager";
-import { ExcelSyncTokenButton } from "@/components/admin/excel-sync-token-button";
 import { HeroImageActionField } from "@/components/admin/hero-image-action-field";
+import { AdminGuide } from "@/components/admin/admin-guide";
 import type {
   AdminCrudViewModel,
   AdminFieldDefinition,
@@ -664,6 +663,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
   const [imageManagerOpen, setImageManagerOpen] = useState(false);
   const [availabilityManagerOpen, setAvailabilityManagerOpen] = useState(false);
   const [duplicatesManagerOpen, setDuplicatesManagerOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [deletedDuplicateIds, setDeletedDuplicateIds] = useState<number[]>([]);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [, submitEditor, isSaving] = useActionState(async (_state: null, data: FormData) => {
@@ -967,6 +967,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                             setQuery("");
                             setPackSearch("");
                             setEditor(null);
+                            setGuideOpen(false);
                           }}
                           className={`flex w-full items-center justify-between rounded-[18px] px-4 py-4 text-left transition ${
                             active
@@ -1001,6 +1002,15 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
 
           <button
             type="button"
+            onClick={() => { setImageManagerOpen(false); setAvailabilityManagerOpen(false); setDuplicatesManagerOpen(false); setEditor(null); setGuideOpen(true); }}
+            className={`mt-3 flex w-full items-center justify-between gap-3 rounded-[18px] border px-4 py-4 text-left transition ${guideOpen ? "border-white/20 bg-white/20 text-white" : "border-white/10 bg-white/10 text-[#f8f1e7]/90 hover:bg-white/15"}`}
+          >
+            <span><span className="block text-sm font-semibold">Guía de administración</span><span className="mt-1 block text-xs text-[#f8f1e7]/60">Ayuda paso a paso</span></span>
+            <BookOpen size={20} className="shrink-0" aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
             onClick={() => { setDuplicatesManagerOpen(false); setImageManagerOpen(false); setAvailabilityManagerOpen(true); }}
             className="mt-3 flex w-full items-center justify-between gap-3 rounded-[18px] border border-white/10 bg-white/10 px-4 py-4 text-left text-[#f8f1e7]/90 transition hover:bg-white/15"
           >
@@ -1021,12 +1031,12 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
             <span className={styles.duplicateCount} aria-hidden="true">{duplicateCount}</span>
           </button>
 
-          <ExcelSyncTokenButton />
 
         </aside>
 
         <section className="min-w-0 flex-1 px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
-          <div className={`${styles.frame} min-w-0 rounded-[30px] border border-[var(--pf-border)] bg-[rgba(250,246,239,0.92)] p-5 shadow-[0_24px_60px_rgba(58,44,25,0.12)] backdrop-blur`}>
+          {guideOpen ? <AdminGuide onClose={() => setGuideOpen(false)} /> : null}
+          <div className={`${guideOpen ? "hidden" : ""} ${styles.frame} min-w-0 rounded-[30px] border border-[var(--pf-border)] bg-[rgba(250,246,239,0.92)] p-5 shadow-[0_24px_60px_rgba(58,44,25,0.12)] backdrop-blur`}>
             <div className={styles.summaryHeader}>
               <div className="max-w-3xl">
                 <p className="text-[11px] font-black uppercase tracking-[0.36em] text-[var(--pf-secondary)]">Administracion</p>
@@ -1077,11 +1087,10 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                     </button>
                   ) : null}
 
-                  {selectedTable.key === "products" ? <ExcelImportButton className={styles.action} /> : null}
-
                   {selectedTable.key === "products" ? <PriceListDownloadButton className={styles.action} /> : null}
 
                   {selectedTable.key === "products" ? <CustomerOrderDownloadButton className={styles.action} /> : null}
+
 
                   <button
                     type="button"
@@ -1508,7 +1517,8 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
 
                   const value = editor.draft[field.key];
                   const productField = field.key as ProductValidationField;
-                  const productRequired = selectedTable.key === "products" && Boolean(field.required);
+                  const isZeroAllowedPrice = selectedTable.key === "products" && ["publicPrice", "memberPrice"].includes(field.key);
+                  const productRequired = selectedTable.key === "products" && Boolean(field.required) && !isZeroAllowedPrice;
                   const fieldError = selectedTable.key === "products"
                     ? productServerErrors[productField] || (productTouched[productField] ? productErrors[productField] : undefined)
                     : undefined;
@@ -1743,7 +1753,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                                 : current,
                             )
                           }
-                          className="w-full rounded-[22px] border border-[var(--pf-border-soft)] bg-white px-4 py-3 text-sm text-[var(--pf-text)] outline-none transition focus:border-[var(--pf-primary)] aria-[invalid=true]:border-red-600"
+                          className={`${styles.editorField} w-full rounded-[22px] border border-[var(--pf-border-soft)] bg-white px-4 py-3 text-sm text-[var(--pf-text)] outline-none transition focus:border-[var(--pf-primary)] aria-[invalid=true]:border-red-600`}
                         >
                           <option value="">Seleccionar...</option>
                           {options.map((option) => (
@@ -1784,7 +1794,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                             )
                           }
                           rows={5}
-                          className="w-full rounded-[22px] border border-[var(--pf-border-soft)] bg-white px-4 py-3 text-sm text-[var(--pf-text)] outline-none transition placeholder:text-[var(--pf-muted)] focus:border-[var(--pf-primary)] aria-[invalid=true]:border-red-600"
+                          className={`${styles.editorField} w-full rounded-[22px] border border-[var(--pf-border-soft)] bg-white px-4 py-3 text-sm text-[var(--pf-text)] outline-none transition placeholder:text-[var(--pf-muted)] focus:border-[var(--pf-primary)] aria-[invalid=true]:border-red-600`}
                           readOnly={field.readonly}
                         />
                         <ProductFieldError field={field.key} message={fieldError} />
@@ -2165,7 +2175,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                         aria-label={selectedTable.key === "products" ? field.label : undefined}
                         aria-invalid={Boolean(fieldError)}
                         aria-describedby={errorId}
-                        min={selectedTable.key === "products" && ["publicPrice", "memberPrice"].includes(field.key) ? 1 : undefined}
+                        min={isZeroAllowedPrice ? 0 : undefined}
                         max={selectedTable.key === "products" && ["publicPrice", "memberPrice", "featuredPriority"].includes(field.key) ? PRODUCT_INTEGER_MAX : undefined}
                         step={selectedTable.key === "products" && field.kind === "number" ? 1 : undefined}
                         type={field.kind === "number" ? "number" : "text"}
@@ -2183,7 +2193,7 @@ export function AdminWorkspace({ model }: { model: AdminCrudViewModel }) {
                               : current,
                           )
                         }
-                        className={`w-full rounded-[22px] border px-4 py-3 text-sm outline-none transition placeholder:text-[var(--pf-muted)] focus:border-[var(--pf-primary)] aria-[invalid=true]:border-red-600 ${
+                        className={`${styles.editorField} w-full rounded-[22px] border px-4 py-3 text-sm outline-none transition placeholder:text-[var(--pf-muted)] focus:border-[var(--pf-primary)] aria-[invalid=true]:border-red-600 ${
                           field.readonly
                             ? "border-[var(--pf-border-soft)] bg-[rgba(248,242,232,0.6)] text-[var(--pf-muted)]"
                             : "border-[var(--pf-border-soft)] bg-white text-[var(--pf-text)]"

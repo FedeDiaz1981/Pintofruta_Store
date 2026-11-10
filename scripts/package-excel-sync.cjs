@@ -162,6 +162,12 @@ async function addSheets() {
   config.getCell('B2').protection = { locked: false };
   config.state = 'veryHidden';
 
+  const backup = workbook.addWorksheet('BACKUP_PRECIOS');
+  backup.addRow(['FECHA', 'ACTIVO', 'ID', 'DETALLE / VARIEDAD', 'PUBLICO', 'DESCUENTO', 'FILA ORIGEN']);
+  styleHeader(backup.getRow(1));
+  backup.columns = [{ width: 22 }, { width: 12 }, { width: 12 }, { width: 90 }, { width: 16 }, { width: 16 }, { width: 12 }];
+  backup.state = 'veryHidden';
+
   pedido.getCell('A1').value = 'ACTUALIZAR BASE';
   pedido.getCell('A1').font = { name: 'Montserrat Medium', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
   pedido.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3B6B5A' } };
@@ -172,13 +178,31 @@ async function addSheets() {
   pedido.getCell('B1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFA86D45' } };
   pedido.getCell('B1').alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
   pedido.getCell('B1').border = { top: { style: 'thin', color: { argb: 'FF895638' } }, left: { style: 'thin', color: { argb: 'FF895638' } }, bottom: { style: 'thin', color: { argb: 'FF895638' } }, right: { style: 'thin', color: { argb: 'FF895638' } } };
-  pedido.getRow(1).height = 24;
+  pedido.getCell('C1').value = 'ORDENAR DETALLES POR MARCA';
+  pedido.getCell('C1').font = { name: 'Montserrat Medium', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+  pedido.getCell('C1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF5B7891' } };
+  pedido.getCell('C1').alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  pedido.getCell('C1').border = { top: { style: 'thin', color: { argb: 'FF466276' } }, left: { style: 'thin', color: { argb: 'FF466276' } }, bottom: { style: 'thin', color: { argb: 'FF466276' } }, right: { style: 'thin', color: { argb: 'FF466276' } } };
+  pedido.getCell('D1').value = null;
+  pedido.getCell('D1').font = {};
+  pedido.getCell('D1').fill = { type: 'pattern', pattern: 'none' };
+  pedido.getCell('D1').alignment = { horizontal: 'general', vertical: 'bottom', wrapText: false };
+  pedido.getCell('D1').border = {};
+  // La fila de acciones queda sin celdas combinadas y con altura suficiente
+  // para que ACTUALIZAR BASE se muestre completo en dos líneas.
+  pedido.getRow(1).height = 38;
   pedido.getRow(2).height = 8;
   for (let rowNumber = 4; rowNumber <= pedido.rowCount; rowNumber += 1) {
     const publicCell = pedido.getCell(`D${rowNumber}`);
     const discountCell = pedido.getCell(`E${rowNumber}`);
     discountCell.style = JSON.parse(JSON.stringify(publicCell.style));
     discountCell.numFmt = publicCell.numFmt || '$ #,##0.00';
+  }
+  /* La planilla de pedidos ya no forma parte del sincronizador. */
+  if (false) {
+  importSheet.getCell('A2').value = 'Pegá aquí el contenido de la solapa PEDIDO CLIENTE. Luego volvé a PRECIOS y presioná IMPORTAR PEDIDO.';
+  importSheet.addRow(['CANTIDAD', 'MARCA', 'DETALLE / VARIEDAD', 'PRESENTACIÓN', 'PRECIO', 'SUBTOTAL', 'ID EN SITIO', 'RESULTADO', 'DETALLE EN SITIO']);
+  importSheet.columns = [{ width: 12 }, { width: 28 }, { width: 90 }, { width: 18 }, { width: 16 }, { width: 16 }, { width: 14 }, { width: 24 }, { width: 90 }];
   }
   const outsideLastColumn = pedido.columnCount;
   for (let columnNumber = 6; columnNumber <= outsideLastColumn; columnNumber += 1) {
@@ -215,6 +239,13 @@ async function addSheets() {
     if (index === 1) {
       for (const tag of ['drawing', 'legacyDrawing', 'legacyDrawingHF']) {
         for (const node of Array.from(doc.getElementsByTagNameNS(sheetNs, tag))) node.parentNode.removeChild(node);
+      }
+      const autoFilters = Array.from(doc.getElementsByTagNameNS(sheetNs, 'autoFilter'));
+      if (autoFilters.length > 0) {
+        const detailFilter = doc.createElementNS(sheetNs, 'filterColumn');
+        detailFilter.setAttribute('colId', '2');
+        detailFilter.setAttribute('hiddenButton', '1');
+        autoFilters[0].appendChild(detailFilter);
       }
     }
     for (const protection of Array.from(doc.getElementsByTagNameNS(sheetNs, 'sheetProtection'))) {

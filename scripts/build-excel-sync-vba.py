@@ -59,7 +59,7 @@ for index in range(1, 6):
         '',
     ])
     if index == 1:
-        sheet_source += "\nPrivate Sub Worksheet_SelectionChange(ByVal Target As Range)\n    If Not Intersect(Target, Range(\"A1\")) Is Nothing Then Application.Run \"'\" & ThisWorkbook.Name & \"'!ActualizarCatalogo\"\n    If Not Intersect(Target, Range(\"B1\")) Is Nothing Then Application.Run \"'\" & ThisWorkbook.Name & \"'!SincronizarCambios\"\nEnd Sub\n"
+        sheet_source += "\nPrivate Sub Worksheet_SelectionChange(ByVal Target As Range)\n    If Not Intersect(Target, Range(\"A1\")) Is Nothing Then Application.Run \"'\" & ThisWorkbook.Name & \"'!ActualizarCatalogo\"\n    If Not Intersect(Target, Range(\"B1\")) Is Nothing Then Application.Run \"'\" & ThisWorkbook.Name & \"'!SincronizarCambios\"\n    If Not Intersect(Target, Range(\"C1\")) Is Nothing Then Application.Run \"'\" & ThisWorkbook.Name & \"'!OrdenarProductosPorMarca\"\nEnd Sub\n\nPrivate Sub Worksheet_Change(ByVal Target As Range)\n    If Intersect(Target, Range(\"B4:B5000\")) Is Nothing Then Exit Sub\n    On Error GoTo CleanUp\n    Application.EnableEvents = False\n    ValidarIdsPrecios\nCleanUp:\n    Application.EnableEvents = True\nEnd Sub\n"
     sources[f"Sheet{index}"] = sheet_source
 
 with tempfile.TemporaryDirectory(prefix="pintofruta-excel-vba-") as build_dir:

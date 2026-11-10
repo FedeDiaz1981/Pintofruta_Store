@@ -71,7 +71,7 @@ function key(value: string) {
 
 function price(value: unknown, field: "publicPrice" | "memberPrice") {
   const label = field === "publicPrice" ? "Precio publico" : "Precio logueado";
-  if (value == null || text(value) === "") throw new Error(`${label}: falta completar el precio.`);
+  if (value == null || text(value) === "") return 0;
   let numeric = value;
   if (typeof value === "string") {
     let raw = value.trim().replace(/ARS|\$|\s/gi, "");

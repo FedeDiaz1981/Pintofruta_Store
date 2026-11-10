@@ -41,7 +41,7 @@ export function CustomerOrderDownloadButton({ className }: { className?: string 
 
   return <>
     <button type="button" className={className} onClick={() => { setAudience(""); setError(null); setOpen(true); }}>
-      <FileSpreadsheet size={18} aria-hidden="true" />Descargar planilla de pedidos
+      <FileSpreadsheet size={18} aria-hidden="true" />Descargar planilla de precios actualizadas
     </button>
     <dialog ref={dialog} className={`${styles.dialog} ${styles.downloadDialog}`} aria-labelledby={`${id}-title`}
       onClose={() => setOpen(false)} onCancel={event => { if (downloading.current) event.preventDefault(); }}>

@@ -25,7 +25,9 @@ export async function POST(request: Request) {
   if (!auth || !auth.scopes.includes("catalog:write")) return unauthorized();
   try {
     const body = await request.text();
-    if (Buffer.byteLength(body, "utf8") > 2_000_000) return Response.json({ ok: false, error: "La sincronización es demasiado grande." }, { status: 413 });
+    // Las altas desde el comparador pueden incluir una imagen codificada en base64.
+    // El límite de imagen sigue siendo 5 MB; el cuerpo necesita margen para el base64 y los demás campos.
+    if (Buffer.byteLength(body, "utf8") > 10_000_000) return Response.json({ ok: false, error: "La sincronización es demasiado grande." }, { status: 413 });
     const payload = JSON.parse(body) as ExcelSyncPayload;
     const result = await applyExcelSync(payload);
     return Response.json({ ok: true, ...result });

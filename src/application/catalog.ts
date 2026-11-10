@@ -13,6 +13,8 @@ import type {
 } from "@/domain/site-content";
 import { normalizeText } from "@/lib/catalog";
 import { createProductSearch, createTextSearch, productSearchValues } from "@/lib/search";
+import { getCurrentViewer } from "@/infrastructure/auth/pintofruta-auth";
+import { isProductVisibleForViewer } from "@/lib/pricing";
 
 export interface DynamicMenuItem {
   label: string;
@@ -168,13 +170,13 @@ const getActiveBannerRows = cache(async () => {
   }
 });
 
-function filterCatalogProducts(products: ProductItem[], filters: CatalogFilters = {}) {
+function filterCatalogProducts(products: ProductItem[], filters: CatalogFilters = {}, viewer?: Awaited<ReturnType<typeof getCurrentViewer>>) {
   const matchesSearch = createProductSearch(filters.query);
   const brand = normalizeText(filters.brand);
   const category = normalizeText(filters.category);
 
   return products.filter((item) => {
-    if (item.status !== "published") {
+    if (item.status !== "published" || !isProductVisibleForViewer(item, viewer)) {
       return false;
     }
 
@@ -366,6 +368,8 @@ export async function getActiveSiteBanners(): Promise<BannerItem[]> {
 
 export async function getHomePageViewModel(): Promise<HomePageViewModel> {
   const content = await getSiteContent();
+  const viewer = await getCurrentViewer();
+  const visibleProducts = content.products.filter((product) => product.status === "published" && isProductVisibleForViewer(product, viewer));
   const banners = [...content.banners].filter((item) => item.active).sort((a, b) => a.order - b.order);
   const heroSlides = [...content.heroSlides]
     .filter((item) => item.active)
@@ -373,12 +377,12 @@ export async function getHomePageViewModel(): Promise<HomePageViewModel> {
     .map((slide) => ({
       ...slide,
       imageProduct: slide.imageAction === "product"
-        ? content.products.find((product) => product.id === slide.imageProductId && product.status === "published" && !product.soldOut)
+        ? visibleProducts.find((product) => product.id === slide.imageProductId && !product.soldOut)
         : undefined,
     }));
   const spotlightSlide = heroSlides.find((item) => item.homeSpotlight) ?? heroSlides[0] ?? null;
-  const featuredProducts = buildFeaturedProducts(content.products, 12);
-  const trendingProducts = buildTrendingProducts(content.products, 8);
+  const featuredProducts = buildFeaturedProducts(visibleProducts, 12);
+  const trendingProducts = buildTrendingProducts(visibleProducts, 8);
   const activePromotions = [...(content.packs ?? [])]
     .filter((item) => item.active && item.items.length > 0)
     .sort((left, right) => (left.order ?? 0) - (right.order ?? 0) || left.title.localeCompare(right.title, "es", { sensitivity: "base" }));
@@ -404,7 +408,7 @@ export async function getHomePageViewModel(): Promise<HomePageViewModel> {
     featuredBrands,
     stats: [
       { label: "marcas", value: String(brands.length) },
-      { label: "productos", value: String(content.products.filter((product) => product.status === "published").length) },
+      { label: "productos", value: String(visibleProducts.length) },
       { label: "destacados", value: String(featuredProducts.length) },
     ],
   };
@@ -413,23 +417,26 @@ export async function getHomePageViewModel(): Promise<HomePageViewModel> {
 export async function getProductBySku(sku: string): Promise<ProductItem | null> {
   const normalizedSku = normalizeText(sku);
   const content = await getSiteContent();
-  const product = content.products.find((item) => item.status === "published" && normalizeText(item.sku) === normalizedSku);
+  const viewer = await getCurrentViewer();
+  const product = content.products.find((item) => item.status === "published" && isProductVisibleForViewer(item, viewer) && normalizeText(item.sku) === normalizedSku);
 
   return product ?? null;
 }
 
 export async function searchCatalog(filters: CatalogFilters = {}) {
   const content = await getSiteContent();
-  return filterCatalogProducts(content.products, filters);
+  const viewer = await getCurrentViewer();
+  return filterCatalogProducts(content.products, filters, viewer);
 }
 
 export async function getGalleryPageViewModel(filters: CatalogFilters = {}): Promise<GalleryPageViewModel> {
   const content = await getSiteContent();
-  const baseProducts = content.products.filter((product) => product.status === "published");
+  const viewer = await getCurrentViewer();
+  const baseProducts = content.products.filter((product) => product.status === "published" && isProductVisibleForViewer(product, viewer));
   const filteredProducts = filterCatalogProducts(baseProducts, {
     ...filters,
     trendingOnly: false,
-  });
+  }, viewer);
   const publishedProducts = filters.trendingOnly ? buildTrendingProducts(filteredProducts, filteredProducts.length) : filteredProducts;
   const activeBrandNames = new Set(content.brands.filter((brand) => brand.active !== false).map((brand) => normalizeText(brand.name)));
   const visibleCategoryNames = new Set((content.categories ?? []).filter((category) => category.visible).map((category) => normalizeText(category.name)));

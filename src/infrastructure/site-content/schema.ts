@@ -155,6 +155,8 @@ export const siteContentSchemaSql = `
   alter table products add column if not exists category_names jsonb not null default '[]'::jsonb;
   alter table products add column if not exists template_row_map jsonb not null default '{}'::jsonb;
   alter table products add column if not exists deleted_at timestamptz;
+  alter table products alter column public_price type numeric(12,2) using public_price::numeric(12,2);
+  alter table products alter column member_price type numeric(12,2) using member_price::numeric(12,2);
 
   create table if not exists promotion_packs (
     id integer primary key,

@@ -64,7 +64,7 @@ async function main() {
   assert.ok(plan([[null, 'JABON', 'NUEVA', 1, 1], [null, 'JABON', 'NUEVA', 1, 1]]).errors.some(error => error.includes('repetido')));
   assert.notEqual(plan([row10]).revision, plan([row10], [], products.map(product => ({ ...product, name: `${product.name} cambiado` }))).revision);
   assert.equal(parsePriceList(buffer([[10, 'Nombre', 'Marca', '$ 1.234,00', '1.000']])).rows[0].publicPrice, 1234);
-  for (const value of [0, '0', '$ 0,00', -1, 1.5, '$1.234,50', '', 'no', true, 2147483648]) {
+  for (const value of [-1, 'no', true, 2147483648]) {
     for (const prices of [[value, 1], [1, value]]) {
       const parsed = parsePriceList(buffer([[10, 'Nombre', 'Marca', ...prices]]));
       assert.ok(parsed.errors.some(error => error.startsWith('Fila 2:')), `Reject invalid price ${value}`);
@@ -72,6 +72,19 @@ async function main() {
       assert.equal(parsed.rows[0].rawValues[prices[0]===value?'publicPrice':'memberPrice'],String(value));
       assert.equal(planPriceListImport(parsed,products,[],'invalid.xlsx').rows[0].action,'error');
     }
+  }
+  for (const value of [1.5, 1.55, '$1.234,50']) {
+    for (const prices of [[value, 1], [1, value]]) {
+      const parsed = parsePriceList(buffer([[10, 'Nombre', 'Marca', ...prices]]));
+      assert.equal(parsed.errors.length, 0, `Accept decimal price ${value}`);
+      assert.equal(parsed.rows.length, 1);
+    }
+  }
+  for (const value of [0, '0', '$ 0,00', '']) {
+    const parsed = parsePriceList(buffer([[10, 'Nombre', 'Marca', value, value]]));
+    assert.equal(parsed.errors.length, 0, `Accept zero/blank price ${value}`);
+    assert.equal(parsed.rows[0].publicPrice, 0);
+    assert.equal(parsed.rows[0].memberPrice, 0);
   }
   assert.equal(parsePriceList(buffer([[10, 'Nombre', 'Marca', 1, 2147483647]])).errors.length, 0);
   for (const row of [[10,'Nombre\u0000invalido','Marca',1,1],[10,'Nombre','Marca\u0000invalida',1,1]]) {
@@ -242,18 +255,18 @@ async function main() {
     assert.equal(JSON.parse(update.params[0])[0].brand,brands.length===1?'BIOWAY':'Bioway');
   }
   queries.length = 0;
-  const invalidFile = file([[10,'Nombre','Marca',0,1]]);
+  const invalidFile = file([[10,'Nombre','Marca',-1,1]]);
   const invalidPreview = await persistence.buildExcelImportPlan(invalidFile);
   queries.length = 0;
   await assert.rejects(()=>persistence.applyExcelImport(invalidFile,[],invalidPreview.revision),/No hay cambios validos/);
   assert.ok(!queries.some(query=>/^(insert|update|commit)/.test(query.sql)),'A file without valid changes never writes');
   currentBrands = [{name:'BIOWAY'},{name:'OTRA'}];
   currentProducts = structuredClone(importProducts);
-  const mixed = file([[10,'MIEL RENOMBRADA','BIOWAY',5100,4600],[11,'Invalido','BIOWAY',0,1],ambiguous,[null,'Jabon prueba','NUEVA',100,90],[12,products[2].name,'OTRA',2200,2000]]);
+  const mixed = file([[10,'MIEL RENOMBRADA','BIOWAY',5100,4600],[11,'Invalido','BIOWAY',-1,1],ambiguous,[null,'Jabon prueba','NUEVA',100,90],[12,products[2].name,'OTRA',2200,2000]]);
   const mixedPreview = await persistence.buildExcelImportPlan(mixed);
   assert.equal(mixedPreview.updatedProducts,1); assert.equal(mixedPreview.createdProducts,1);
   assert.equal(mixedPreview.skippedProducts,3); assert.equal(mixedPreview.unresolvedRows,1); assert.equal(mixedPreview.unchangedProducts,1);
-  assert.ok(mixedPreview.rows[1].errors.length); assert.equal(mixedPreview.rows[1].rawValues.publicPrice,'0');
+  assert.ok(mixedPreview.rows[1].errors.length); assert.equal(mixedPreview.rows[1].rawValues.publicPrice,'-1');
   queries.length = 0;
   await persistence.applyExcelImport(mixed,[],mixedPreview.revision);
   assert.deepEqual(JSON.parse(queries.find(query=>query.sql.startsWith('update products')).params[0]).map(row=>row.id),[10]);

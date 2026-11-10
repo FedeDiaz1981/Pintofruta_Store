@@ -2,6 +2,17 @@
   container-type: inline-size;
 }
 
+/* Campos del editor: contraste suficiente sobre el fondo crema del modal. */
+.editorField {
+  border-color: #c9b5a2 !important;
+  box-shadow: inset 0 0 0 1px rgba(120, 83, 53, 0.04), 0 1px 2px rgba(74, 57, 38, 0.04);
+}
+
+.editorField:focus {
+  border-color: var(--pf-primary) !important;
+  box-shadow: 0 0 0 3px rgba(168, 109, 69, 0.14);
+}
+
 .duplicateCount {
   display: inline-flex;
   align-items: center;
