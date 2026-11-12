@@ -10,6 +10,7 @@ const output = process.argv[3] || path.join(root, 'artifacts', 'PintoFruta_Catal
 const vbaPath = path.join(root, 'artifacts', 'excel-sync-vba-project.bin');
 const localEnv = fs.existsSync(path.join(root, '.env.local')) ? fs.readFileSync(path.join(root, '.env.local'), 'utf8') : '';
 const fixedToken = process.env.EXCEL_SYNC_FIXED_TOKEN || localEnv.match(/^EXCEL_SYNC_FIXED_TOKEN=(.+)$/m)?.[1]?.trim() || 'REEMPLAZAR_TOKEN';
+const apiUrl = process.env.EXCEL_SYNC_API_URL || localEnv.match(/^EXCEL_SYNC_API_URL=(.+)$/m)?.[1]?.trim() || 'https://pintofruta.com/api/integrations/excel/sync';
 
 function styleHeader(row) {
   row.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -152,7 +153,7 @@ async function addSheets() {
 
   const config = workbook.addWorksheet('CONFIGURACION');
   config.addRows([
-    ['URL API', 'http://localhost:3000/api/integrations/excel/sync'],
+    ['URL API', apiUrl],
     ['TOKEN', fixedToken],
     ['ULTIMA ACTUALIZACION', ''],
     ['INSTRUCCIONES', 'La clave fija ya está cargada. No modificar B2 salvo que se reemplace la clave del servidor.'],
