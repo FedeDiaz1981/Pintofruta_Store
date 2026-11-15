@@ -18,7 +18,7 @@ export const revalidate = 0;
 
 export const metadata: Metadata = {
   title: "Pintofruta",
-  description: "Proyecto dinámico basado en la maqueta estática de Pintofruta.",
+  description: "Conectamos marcas, productos y personas.",
   icons: {
     icon: [{ url: "/icon.png", type: "image/png" }],
     shortcut: "/icon.png",

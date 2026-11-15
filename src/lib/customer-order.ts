@@ -95,7 +95,12 @@ export async function buildCustomerOrderFile(products: CustomerOrderProduct[], a
     });
     heading.getCell(3).alignment = { vertical: "middle", wrapText: true };
     group.products.forEach((product, index) => {
-      const price = resolveProductUnitPrice({ publicPrice: product.public_price, memberPrice: product.member_price }, { authenticated: audience === "member", canSeePrices: true });
+      // PostgreSQL devuelve las columnas numeric como strings a través de `pg`.
+      // Normalizamos antes de resolver y validar el precio para no rechazar
+      // productos válidos en producción (por ejemplo, "13800.00").
+      const publicPrice = Number(product.public_price);
+      const memberPrice = Number(product.member_price);
+      const price = resolveProductUnitPrice({ publicPrice, memberPrice }, { authenticated: audience === "member", canSeePrices: true });
       if (!Number.isFinite(price) || price < 0) throw new Error(`El producto #${product.id} no tiene un precio válido.`);
       const row = sheet.addRow([null, product.brand, product.name, product.presentation, price]);
       const model = index === 0 ? template.firstProductRow : template.productRow;
