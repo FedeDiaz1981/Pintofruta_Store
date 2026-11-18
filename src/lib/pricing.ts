@@ -8,11 +8,16 @@ function canUseMemberPrice(viewer: PricingViewer) {
 }
 
 export function resolveProductUnitPrice(product: Pick<ProductItem, "publicPrice" | "memberPrice">, viewer?: PricingViewer) {
-  if (canUseMemberPrice(viewer) && Number.isFinite(product.memberPrice) && product.memberPrice > 0) {
-    return product.memberPrice;
+  // PostgreSQL devuelve las columnas numeric como strings. Normalizamos ambos
+  // precios para que la comparación no descarte el precio de miembro en producción.
+  const publicPrice = Number(product.publicPrice);
+  const memberPrice = Number(product.memberPrice);
+
+  if (canUseMemberPrice(viewer) && Number.isFinite(memberPrice) && memberPrice > 0) {
+    return memberPrice;
   }
 
-  return product.publicPrice;
+  return Number.isFinite(publicPrice) ? publicPrice : 0;
 }
 
 export function isProductVisibleForViewer(
